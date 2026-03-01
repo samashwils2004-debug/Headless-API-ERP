@@ -1,0 +1,11 @@
+groups:
+  - name: admitflow_recording_rules
+    rules:
+      - record: job:workflow_execution_time:p95_5m
+        expr: histogram_quantile(0.95, sum(rate(workflow_execution_time_bucket[5m])) by (le))
+
+      - record: job:http_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path, method))
+
+      - record: job:events_emitted:rate_5m
+        expr: sum(rate(events_emitted_total[5m])) by (event_type)

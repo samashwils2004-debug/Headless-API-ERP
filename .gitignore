@@ -1,0 +1,42 @@
+﻿# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+*.db
+uploads/
+
+# Coverage / logs
+coverage/
+htmlcov/
+*.log
+
+# Local compatibility link (do not commit)
+frontend-next/
+
+# Archived legacy copy
+archive/

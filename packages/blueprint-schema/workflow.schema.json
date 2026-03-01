@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkflowDefinition",
+  "type": "object",
+  "required": ["initial_state", "states"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "version": { "type": "string" },
+    "initial_state": { "type": "string" },
+    "states": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "transitions"],
+        "properties": {
+          "type": { "type": "string", "enum": ["initial", "intermediate", "terminal"] },
+          "transitions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["to", "condition"],
+              "properties": {
+                "to": { "type": "string" },
+                "condition": { "type": "string" },
+                "emit_event": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

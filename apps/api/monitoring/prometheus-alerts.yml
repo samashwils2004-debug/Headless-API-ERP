@@ -1,0 +1,42 @@
+groups:
+  - name: admitflow_runtime_alerts
+    rules:
+      - alert: AdmitFlowWorkflowExecutionP95High
+        expr: histogram_quantile(0.95, sum(rate(workflow_execution_time_bucket[5m])) by (le)) > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: admitflow-backend
+        annotations:
+          summary: "Workflow execution p95 above target"
+          description: "workflow_execution_time p95 has been above 50ms for 10 minutes."
+
+      - alert: AdmitFlowBlueprintValidationFailuresSpike
+        expr: sum(increase(blueprint_validation_failures_total[15m])) > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: admitflow-backend
+        annotations:
+          summary: "Blueprint validation failures spiking"
+          description: "More than 20 blueprint validation failures detected in 15 minutes."
+
+      - alert: AdmitFlowRedisEventAppendFailures
+        expr: increase(event_stream_append_failures_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: admitflow-backend
+        annotations:
+          summary: "Redis event stream append failures detected"
+          description: "Event pipeline is in DB-only fallback mode; check Redis connectivity."
+
+      - alert: AdmitFlowEventEmissionDrop
+        expr: sum(rate(events_emitted_total[10m])) < 0.001
+        for: 20m
+        labels:
+          severity: warning
+          service: admitflow-backend
+        annotations:
+          summary: "Event emission rate unusually low"
+          description: "events_emitted rate has dropped unexpectedly; check upstream execution traffic."

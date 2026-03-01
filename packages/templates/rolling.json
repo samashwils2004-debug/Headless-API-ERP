@@ -1,0 +1,22 @@
+{
+  "id": "rolling-admissions",
+  "version": "1.0.0",
+  "initial_state": "submitted",
+  "states": {
+    "submitted": {
+      "type": "initial",
+      "transitions": [
+        { "to": "decision", "condition": "documents_complete == true", "emit_event": "application.ready" }
+      ]
+    },
+    "decision": {
+      "type": "intermediate",
+      "transitions": [
+        { "to": "accepted", "condition": "score >= cutoff", "emit_event": "application.accepted" },
+        { "to": "waitlisted", "condition": "score < cutoff", "emit_event": "application.waitlisted" }
+      ]
+    },
+    "accepted": { "type": "terminal", "transitions": [] },
+    "waitlisted": { "type": "terminal", "transitions": [] }
+  }
+}

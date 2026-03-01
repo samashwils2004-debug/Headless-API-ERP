@@ -1,0 +1,24 @@
+{
+  "id": "undergraduate-admissions",
+  "version": "1.0.0",
+  "initial_state": "submitted",
+  "states": {
+    "submitted": {
+      "type": "initial",
+      "transitions": [
+        { "to": "auto_accepted", "condition": "percentage >= 90", "emit_event": "application.auto_accepted" },
+        { "to": "under_review", "condition": "percentage < 90", "emit_event": "application.under_review" }
+      ]
+    },
+    "under_review": {
+      "type": "intermediate",
+      "transitions": [
+        { "to": "accepted", "condition": "manual_approval == true", "emit_event": "application.accepted" },
+        { "to": "rejected", "condition": "manual_approval == false", "emit_event": "application.rejected" }
+      ]
+    },
+    "auto_accepted": { "type": "terminal", "transitions": [] },
+    "accepted": { "type": "terminal", "transitions": [] },
+    "rejected": { "type": "terminal", "transitions": [] }
+  }
+}

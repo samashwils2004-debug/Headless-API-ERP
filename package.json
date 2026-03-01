@@ -1,0 +1,16 @@
+{
+  "name": "admitflow-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:type-check": "npm --prefix apps/web run type-check",
+    "api:test": "python -m pytest apps/api/tests",
+    "api:seed": "python apps/api/seed_demo.py"
+  }
+}

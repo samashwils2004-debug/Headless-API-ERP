@@ -1,0 +1,22 @@
+{
+  "id": "graduate-committee",
+  "version": "1.0.0",
+  "initial_state": "submitted",
+  "states": {
+    "submitted": {
+      "type": "initial",
+      "transitions": [
+        { "to": "committee_review", "condition": "true", "emit_event": "application.review_started" }
+      ]
+    },
+    "committee_review": {
+      "type": "intermediate",
+      "transitions": [
+        { "to": "accepted", "condition": "committee_decision == 'accept'", "emit_event": "application.accepted" },
+        { "to": "rejected", "condition": "committee_decision == 'reject'", "emit_event": "application.rejected" }
+      ]
+    },
+    "accepted": { "type": "terminal", "transitions": [] },
+    "rejected": { "type": "terminal", "transitions": [] }
+  }
+}
