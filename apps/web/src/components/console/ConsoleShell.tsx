@@ -13,45 +13,29 @@ import {
   KeyRound,
   Settings,
   ChevronDown,
-  Building2,
+  PenTool
 } from "lucide-react";
 
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useProjectStore } from "@/lib/stores/project-store";
 
-function OrquestraLogoMark() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="16" y="16" width="8" height="8" fill="white" />
-      <rect x="16" y="4" width="8" height="8" fill="white" opacity="0.6" />
-      <rect x="28" y="16" width="8" height="8" fill="white" opacity="0.6" />
-      <rect x="16" y="28" width="8" height="8" fill="white" opacity="0.6" />
-      <rect x="4" y="16" width="8" height="8" fill="white" opacity="0.6" />
-      <line x1="20" y1="12" x2="20" y2="16" stroke="white" strokeWidth="1.5" opacity="0.4" />
-      <line x1="24" y1="20" x2="28" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" />
-      <line x1="20" y1="24" x2="20" y2="28" stroke="white" strokeWidth="1.5" opacity="0.4" />
-      <line x1="12" y1="20" x2="16" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" />
-    </svg>
-  );
-}
-
 const NAV = [
-  { href: "/console",           label: "Dashboard",    icon: LayoutDashboard },
-  { href: "/console/projects",  label: "Projects",     icon: FolderKanban    },
-  { href: "/console/templates", label: "Templates",    icon: Layers          },
-  { href: "/console/workflows", label: "Workflows",    icon: GitBranch       },
-  { href: "/console/ai",        label: "AI Generator", icon: Sparkles        },
-  { href: "/console/events",    label: "Event Stream", icon: Radio           },
-  { href: "/console/api-keys",  label: "API Keys",     icon: KeyRound        },
-  { href: "/console/architect", label: "Architect",    icon: Building2       },
-  { href: "/console/settings",  label: "Settings",     icon: Settings        },
+  { href: "/console", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/console/projects", label: "Projects", icon: FolderKanban },
+  { href: "/console/templates", label: "Templates", icon: Layers },
+  { href: "/console/workflows", label: "Workflows", icon: GitBranch },
+  { href: "/console/ai", label: "AI Generator", icon: Sparkles },
+  { href: "/console/architect", label: "Architect", icon: PenTool },
+  { href: "/console/events", label: "Event Stream", icon: Radio },
+  { href: "/console/api-keys", label: "API Keys", icon: KeyRound },
+  { href: "/console/settings", label: "Settings", icon: Settings },
 ];
 
 export function ConsoleShell({ children }: { children: ReactNode }) {
-  const pathname   = usePathname();
-  const context    = useProjectContextStore((s) => s.context);
+  const pathname = usePathname();
+  const context = useProjectContextStore((s) => s.context);
   const setContext = useProjectContextStore((s) => s.setContext);
-  const projects   = useProjectStore((s) => s.projects);
+  const projects = useProjectStore((s) => s.projects);
 
   return (
     <div className="min-h-screen flex" style={{ background: "#0f0f12", color: "#f4f4f5" }}>
@@ -61,11 +45,36 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
         style={{ background: "#141418", borderRight: "1px solid #25252b" }}
       >
         {/* Logo */}
-        <div
-          className="flex items-center gap-3 px-5 h-[60px] shrink-0"
+        <Link
+          href="/"
+          className="group flex items-center gap-3 px-5 h-[60px] shrink-0 hover:bg-[#1e1e24] transition-colors"
           style={{ borderBottom: "1px solid #25252b" }}
         >
-          <OrquestraLogoMark />
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 40 40"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="shrink-0"
+          >
+            {/* Center node */}
+            <rect x="16" y="16" width="8" height="8" fill="white" className="transition-all duration-500 group-hover:scale-110" style={{ transformOrigin: '20px 20px' }} />
+            {/* Top node */}
+            <rect x="16" y="4" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-y-[-2px] group-hover:opacity-100" />
+            {/* Right node */}
+            <rect x="28" y="16" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-x-[2px] group-hover:opacity-100" />
+            {/* Bottom node */}
+            <rect x="16" y="28" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-y-[2px] group-hover:opacity-100" />
+            {/* Left node */}
+            <rect x="4" y="16" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-x-[-2px] group-hover:opacity-100" />
+
+            {/* Connecting lines */}
+            <line x1="20" y1="12" x2="20" y2="16" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+            <line x1="24" y1="20" x2="28" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+            <line x1="20" y1="24" x2="20" y2="28" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+            <line x1="12" y1="20" x2="16" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+          </svg>
           <div>
             <span className="text-sm font-semibold" style={{ color: "#f4f4f5" }}>Orquestra</span>
             <span
@@ -75,7 +84,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
               Infrastructure
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -105,14 +114,6 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                     style={{ background: "#1e1030", color: "#a855f7" }}
                   >
                     AI
-                  </span>
-                )}
-                {label === "Architect" && (
-                  <span
-                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium"
-                    style={{ background: "#0c1a2e", color: "#3b82f6" }}
-                  >
-                    IAL
                   </span>
                 )}
               </Link>
@@ -147,7 +148,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             <span style={{ color: "#71717a" }}>
               <span>Institution: </span>
               <span style={{ color: "#f4f4f5" }} className="font-medium">
-                {context.institutionId ? context.institutionId.slice(0, 8) + "…" : "Not selected"}
+                {context.institutionId || "Not selected"}
               </span>
             </span>
 
@@ -168,16 +169,16 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                     if (!sel) return;
                     setContext({
                       institutionId: sel.institution_id,
-                      projectId:     sel.id,
-                      projectName:   sel.name,
-                      environment:   sel.environment,
+                      projectId: sel.id,
+                      projectName: sel.name,
+                      environment: sel.environment,
                     });
                     document.cookie = `institution_id=${sel.institution_id}; path=/; samesite=lax`;
                     document.cookie = `project_id=${sel.id}; path=/; samesite=lax`;
                   }}
                 >
                   {projects.length === 0 && <option value="">No projects</option>}
-                  {projects.length > 0 && !context.projectId && <option value="">Select project</option>}
+                  {projects.length > 0 && <option value="">Select project</option>}
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -196,8 +197,8 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
               className="px-2 py-0.5 rounded text-[11px] font-medium"
               style={{
                 background: context.environment === "production" ? "#1a0a0a" : "#0a1a0a",
-                color:      context.environment === "production" ? "#ef4444" : "#16a34a",
-                border:     `1px solid ${context.environment === "production" ? "#3a1a1a" : "#1a3a1a"}`,
+                color: context.environment === "production" ? "#ef4444" : "#16a34a",
+                border: `1px solid ${context.environment === "production" ? "#3a1a1a" : "#1a3a1a"}`,
               }}
             >
               {(context.environment ?? "test").toUpperCase()}
@@ -212,13 +213,12 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             >
               Control Plane
             </span>
-            <Link
-              href="/"
-              className="px-2 py-0.5 rounded text-[11px] border transition-colors hover:text-white"
+            <span
+              className="px-2 py-0.5 rounded text-[11px] border"
               style={{ color: "#71717a", borderColor: "#25252b" }}
             >
-              ← Home
-            </Link>
+              Versioned Runtime
+            </span>
           </div>
         </header>
 

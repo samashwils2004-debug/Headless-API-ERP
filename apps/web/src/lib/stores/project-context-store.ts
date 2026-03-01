@@ -28,6 +28,6 @@ export const useProjectContextStore = create<ProjectContextState>()(
       context: defaultContext,
       setContext: (context) => set({ context }),
     }),
-    { name: "admitflow-project-context" }
+    { name: "orquestra-project-context" }
   )
 );

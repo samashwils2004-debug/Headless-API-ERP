@@ -7,7 +7,7 @@ export default function NotFound() {
         <p className="text-sm text-[var(--text-secondary)]">404</p>
         <h1 className="mt-2 text-2xl font-semibold">Route not found</h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          This surface does not exist in the current AdmitFlow architecture.
+          This surface does not exist in the current Orquestra architecture.
         </p>
         <div className="mt-5 flex justify-center gap-2">
           <Link

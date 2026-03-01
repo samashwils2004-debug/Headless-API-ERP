@@ -20,6 +20,6 @@ export const useWorkflowStore = create<WorkflowState>()(
       setWorkflows: (workflows) => set({ workflows }),
       selectWorkflow: (id) => set({ selectedWorkflowId: id }),
     }),
-    { name: "admitflow-workflows" }
+    { name: "orquestra-workflows" }
   )
 );

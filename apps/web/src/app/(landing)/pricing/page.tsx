@@ -9,7 +9,7 @@ export default function PricingPage() {
         <section className="rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-6">
           <h1 className="text-3xl font-semibold">Usage-Based Infrastructure Pricing</h1>
           <p className="mt-3 max-w-3xl text-sm text-[var(--text-secondary)]">
-            AdmitFlow pricing aligns to workflow executions, event volume, and deployment environments. Exact commercial
+            Orquestra pricing aligns to workflow executions, event volume, and deployment environments. Exact commercial
             tiers are provisioned during onboarding.
           </p>
         </section>

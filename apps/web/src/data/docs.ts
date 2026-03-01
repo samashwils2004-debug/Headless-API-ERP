@@ -46,15 +46,15 @@ export const DOC_NAV_GROUPS: DocNavGroup[] = [
 
 const INTRODUCTION_PAGE: DocPage = {
   path: "/docs/introduction",
-  title: "AdmitFlow Docs",
+  title: "Orquestra Docs",
   description: "Institutional workflow infrastructure for deterministic, event-native execution.",
   updatedAt: "February 25, 2026",
   sections: [
     {
-      id: "what-is-admitflow",
-      title: "What is AdmitFlow?",
+      id: "what-is-orquestra",
+      title: "What is Orquestra?",
       paragraphs: [
-        "AdmitFlow is infrastructure, not ERP software and not a student-facing product.",
+        "Orquestra is infrastructure, not ERP software and not a student-facing product.",
         "It provides a headless runtime where institutional workflows are represented as deterministic state machines with explicit versioning.",
       ],
       bullets: [
@@ -68,7 +68,7 @@ const INTRODUCTION_PAGE: DocPage = {
       id: "three-surface-model",
       title: "Three-Surface Model",
       paragraphs: [
-        "Surface 1 is the authority layer at admitflow.dev for routing users.",
+        "Surface 1 is the authority layer at orquestra.dev for routing users.",
         "Surface 2 is the control plane at /console for projects, workflows, AI compile, validation, and deploy.",
         "Surface 3 is the runtime and API platform with FastAPI, PostgreSQL, Redis, and WebSocket streams.",
       ],
@@ -93,7 +93,7 @@ const INTRODUCTION_PAGE: DocPage = {
 const SETUP_PAGE: DocPage = {
   path: "/docs/setup",
   title: "Setup",
-  description: "Bootstrap AdmitFlow frontend and backend with tenant-safe defaults.",
+  description: "Bootstrap Orquestra frontend and backend with tenant-safe defaults.",
   updatedAt: "February 25, 2026",
   sections: [
     {

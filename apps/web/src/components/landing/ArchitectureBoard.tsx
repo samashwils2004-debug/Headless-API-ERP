@@ -3,7 +3,7 @@
 const LAYERS = [
   {
     title: "Client Layer",
-    items: ["Landing (admitflow.dev)", "Console (/console/*)", "Docs (/docs/*)"],
+    items: ["Landing (orquestra.dev)", "Console (/console/*)", "Docs (/docs/*)"],
   },
   {
     title: "Application Layer",

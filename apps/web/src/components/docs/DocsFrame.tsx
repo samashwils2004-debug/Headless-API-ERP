@@ -14,7 +14,7 @@ export function DocsFrame({ children }: { children: React.ReactNode }) {
       <header className="fixed inset-x-0 top-0 z-40 h-14 border-b border-[var(--border-default)] bg-[var(--bg-secondary)]">
         <div className="mx-auto flex h-full max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6">
           <Link href="/" className="text-sm font-semibold text-[var(--text-primary)]">
-            AdmitFlow Docs
+            Orquestra Docs
           </Link>
 
           <div className="hidden items-center gap-6 text-sm text-[var(--text-secondary)] md:flex">

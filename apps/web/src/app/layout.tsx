@@ -1,13 +1,13 @@
-import "./globals.css";
+﻿import "./globals.css";
 import type { Metadata } from "next";
 import React from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "Orquestra — Institutional Runtime",
+  title: "Orquestra - Institutional Workflow Infrastructure",
   description:
-    "AI-native institutional ERP infrastructure. Design, version, and deploy institutional workflows as programmable infrastructure.",
+    "Programmable institutional workflow infrastructure. Define deterministic state machines and deploy versioned runtime logic.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
