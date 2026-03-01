@@ -1,4 +1,4 @@
-﻿"""AdmitFlow settings."""
+"""Orquestra settings — Institutional Runtime."""
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = False
 
-    app_name: str = "AdmitFlow"
+    app_name: str = "Orquestra"
     app_version: str = "2.0.0"
 
     database_url: str = f"sqlite:///{(BASE_DIR / 'admissions.db').as_posix()}"
@@ -40,8 +40,13 @@ class Settings(BaseSettings):
     ]
     console_origin: str = "http://localhost:3000"
 
-    openai_api_key: str = ""
+    # AI providers — all optional, cascade: Gemini → Groq → Mock
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
+    openai_api_key: str = ""  # kept for backward compat
     openai_model: str = "gpt-4-turbo"
+
+    ai_cache_ttl: int = 86400  # 24h Redis cache for AI responses
 
     sentry_dsn: str = ""
 
@@ -65,4 +70,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

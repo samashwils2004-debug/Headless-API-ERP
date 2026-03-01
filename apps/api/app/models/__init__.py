@@ -1,4 +1,4 @@
-﻿"""Core AdmitFlow data model aligned to deterministic, event-native, multi-tenant runtime."""
+"""Core Orquestra data model — deterministic, event-native, multi-tenant runtime."""
 import uuid
 
 from sqlalchemy import (
@@ -127,6 +127,8 @@ class BlueprintProposal(Base):
     status = Column(String(64), nullable=False, default="pending")
     blueprint = Column(JSON)
     validation_result = Column(JSON, nullable=False, default=dict)
+    provider_used = Column(String(64), nullable=False, default="unknown")
+    is_mock = Column(Boolean, default=False, nullable=False)
     compiled_by = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=utcnow_naive, nullable=False)
     deployed_at = Column(DateTime)
@@ -152,3 +154,36 @@ class ProjectRoleBinding(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     role = Column(String(64), nullable=False)
 
+
+class APIKey(Base):
+    """Project-scoped API key for programmatic access."""
+    __tablename__ = "api_keys"
+    __table_args__ = (Index("ix_api_keys_institution", "institution_id"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    institution_id = Column(String, ForeignKey("institutions.id"), nullable=False, index=True)
+    key_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 of full key
+    key_prefix = Column(String(16), nullable=False)  # first 12 chars for display
+    name = Column(String(255), nullable=False)
+    scopes = Column(JSON, nullable=False, default=list)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(String, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=utcnow_naive, nullable=False)
+    last_used_at = Column(DateTime)
+    expires_at = Column(DateTime)
+
+    institution = relationship("Institution", backref="api_keys")
+
+
+class WorkflowTemplate(Base):
+    """Pre-built workflow blueprint templates."""
+    __tablename__ = "workflow_templates"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(120), unique=True, nullable=False)
+    description = Column(Text, nullable=False, default="")
+    category = Column(String(64), nullable=False, default="general")
+    compliance_tags = Column(JSON, nullable=False, default=list)
+    definition = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=utcnow_naive, nullable=False)

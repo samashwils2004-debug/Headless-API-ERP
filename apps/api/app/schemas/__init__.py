@@ -1,4 +1,4 @@
-﻿"""Pydantic schemas for AdmitFlow control plane APIs."""
+"""Pydantic schemas for Orquestra control plane APIs."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -109,7 +109,7 @@ class EventResponse(BaseModel):
 
 
 class BlueprintCompileRequest(BaseModel):
-    prompt: str = Field(min_length=1)
+    prompt: str = Field(min_length=1, max_length=2000)
     institution_context: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -118,6 +118,51 @@ class BlueprintProposalResponse(BaseModel):
     status: str
     blueprint: dict[str, Any] | None
     validation_result: dict[str, Any]
+    provider_used: str = "unknown"
+    is_mock: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# API Key schemas
+class APIKeyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    scopes: list[str] = Field(default_factory=list)
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class APIKeyResponse(BaseModel):
+    id: str
+    name: str
+    key_prefix: str
+    scopes: list[str]
+    is_active: bool
+    created_at: datetime
+    last_used_at: datetime | None = None
+    expires_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class APIKeyCreateResponse(APIKeyResponse):
+    full_key: str  # Only returned on creation
+
+
+class APIKeyListResponse(BaseModel):
+    keys: list[APIKeyResponse]
+
+
+# Template schemas
+class TemplateResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    description: str
+    category: str
+    compliance_tags: list[str]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TemplateListResponse(BaseModel):
+    templates: list[TemplateResponse]

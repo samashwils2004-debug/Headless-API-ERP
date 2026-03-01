@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import secrets
 from contextlib import asynccontextmanager
@@ -9,8 +9,10 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.database import init_db
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.observability import metrics_response, record_http_metrics
 from app.routes import ai, applications, auth, events, projects, workflows
+from app.routes import api_keys, templates
 from app.ws import hub
 
 settings = get_settings()
@@ -28,6 +30,7 @@ if settings.sentry_dsn:
         integrations=[FastApiIntegration(), SqlalchemyIntegration()],
     )
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -37,31 +40,44 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Headless-first deterministic workflow infrastructure",
+    description="AI-native institutional ERP infrastructure — headless-first, deterministic, event-native",
     lifespan=lifespan,
 )
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.console_origin],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Institution-Id", "X-Project-Id"],
 )
+
+# Rate limiting
+app.add_middleware(RateLimitMiddleware, redis_url=settings.redis_url)
 
 
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
+    # CSRF validation for mutations
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path.startswith("/api"):
         csrf_cookie = request.cookies.get("csrf_token")
         csrf_header = request.headers.get("X-CSRF-Token")
-        if csrf_cookie and csrf_cookie != csrf_header:
+        if csrf_cookie and csrf_header and csrf_cookie != csrf_header:
             return JSONResponse(status_code=403, content={"detail": "CSRF token mismatch"})
 
     response: Response = await call_next(request)
+
+    # Security headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Set CSRF token cookie
     if "csrf_token" not in request.cookies:
         response.set_cookie(
             "csrf_token",
@@ -84,12 +100,15 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": detail})
 
 
+# Routes
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(workflows.router, prefix="/api", tags=["workflows"])
 app.include_router(applications.router, prefix="/api", tags=["applications"])
 app.include_router(events.router, prefix="/api", tags=["events"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
+app.include_router(api_keys.router, prefix="/api", tags=["api-keys"])
+app.include_router(templates.router, prefix="/api", tags=["templates"])
 
 
 @app.get("/health")
@@ -117,6 +136,7 @@ async def events_ws(websocket: WebSocket):
     except WebSocketDisconnect:
         hub.disconnect(websocket, institution_id, project_id)
 
+
 @app.get("/")
 def root():
     return {
@@ -131,4 +151,3 @@ def root():
             "dynamic_code_execution": False,
         },
     }
-

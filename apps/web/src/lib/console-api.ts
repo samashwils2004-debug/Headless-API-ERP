@@ -152,3 +152,78 @@ export async function deployBlueprint(tenant: TenantContext, proposalId: string)
   });
   return parse<{ name: string; definition: Record<string, unknown>; is_ai_generated: boolean }>(response);
 }
+
+// ─── API Key Types ────────────────────────────────────────────────────────────
+
+export type APIKeyItem = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  is_active: boolean;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+};
+
+export type APIKeyCreateResponse = APIKeyItem & { full_key: string };
+
+// ─── API Key Functions ────────────────────────────────────────────────────────
+
+export async function listAPIKeys(tenant: TenantContext) {
+  const response = await fetch("/api/api-keys", {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ keys: APIKeyItem[] }>(response);
+}
+
+export async function createAPIKey(
+  tenant: TenantContext,
+  payload: { name: string; scopes: string[]; expires_in_days?: number }
+) {
+  const response = await fetch("/api/api-keys", {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify(payload),
+  });
+  return parse<APIKeyCreateResponse>(response);
+}
+
+export async function revokeAPIKey(tenant: TenantContext, keyId: string) {
+  const response = await fetch(`/api/api-keys/${keyId}`, {
+    method: "DELETE",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ ok: boolean }>(response);
+}
+
+// ─── Template Types ───────────────────────────────────────────────────────────
+
+export type TemplateItem = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  compliance_tags: string[];
+};
+
+// ─── Template Functions ───────────────────────────────────────────────────────
+
+export async function listTemplates(tenant: TenantContext, category?: string) {
+  const url = category ? `/api/templates?category=${encodeURIComponent(category)}` : "/api/templates";
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ templates: TemplateItem[] }>(response);
+}
+
+export async function deployTemplate(tenant: TenantContext, templateId: string) {
+  const response = await fetch(`/api/templates/${templateId}/deploy`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+  });
+  return parse<WorkflowItem>(response);
+}

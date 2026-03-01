@@ -1,167 +1,407 @@
-﻿import Link from "next/link";
-
-import { ArchitectureBoard } from "@/components/landing/ArchitectureBoard";
-import { AiCompilerDemo } from "@/components/landing/AiCompilerDemo";
+import Link from "next/link";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
-const ENTRY_SURFACES = [
+const INFRA_PRIMITIVES = [
   {
-    title: "Developer Console",
-    href: "/console",
-    description: "Control plane for projects, workflows, AI compilation, validation, and deployment.",
+    icon: "⬛",
+    label: "Architecture Designer",
+    description: "AI-generated ERP models with domain graphs, workflow relationships, and integration boundaries.",
+    color: "#3b82f6",
   },
   {
-    title: "Architecture",
-    href: "/architecture",
-    description: "Three-surface model and deterministic runtime architecture mapping.",
+    icon: "⚙️",
+    label: "Workflow Engine",
+    description: "Deterministic state machine execution with safe condition evaluation and versioned deployments.",
+    color: "#a855f7",
   },
   {
-    title: "API Docs",
-    href: "/docs/api-reference",
-    description: "Headless API contracts, event schema, and deployment constraints.",
+    icon: "((o))",
+    label: "Event Backbone",
+    description: "Real-time streaming for all state transitions with WebSocket support and audit trails.",
+    color: "#10b981",
   },
 ];
 
-const PRIMITIVES = [
+const DEVELOPER_FEATURES = [
   {
-    title: "Workflow Engine",
-    description:
-      "Deterministic state machine executor with safe condition evaluation and immutable deployed versions.",
-    snippet: `{"initial_state":"submitted","states":{"submitted":{"transitions":[{"to":"under_review"}]}}}`,
-    href: "/docs/workflow-engine",
+    tag: "AI-Powered",
+    icon: "✦",
+    title: "Iterative AI Prompting",
+    description: "Refine your ERP architecture through conversational AI. Each iteration creates a new version.",
   },
   {
-    title: "Schema Engine",
-    description: "Strict Pydantic + JSON schema validation for applicants, applications, and blueprint structures.",
-    snippet: `{"schema":{"valid":true,"errors":[]}}`,
-    href: "/docs/tech-stack",
+    tag: "Deterministic",
+    icon: "⬡",
+    title: "Versioned Infrastructure",
+    description: "Every architecture, workflow, and schema is immutably versioned like Docker images.",
   },
   {
-    title: "Event Engine",
-    description: "Every transition persists domain events to PostgreSQL and streams through Redis and WebSocket.",
-    snippet: `{"type":"application.accepted","version":"1","project_id":"proj_123"}`,
-    href: "/docs/api-reference",
+    tag: "Git Native",
+    icon: "⌥",
+    title: "GitHub Sync",
+    description: "Auto-commit generated infrastructure to your repo. Bidirectional sync with developer edits.",
   },
   {
-    title: "RBAC Engine",
-    description: "Action-level permissions and project-scoped checks backed by database row-level security.",
-    snippet: `check_permission("workflow:read")`,
-    href: "/docs/security",
+    tag: "Type-Safe",
+    icon: "☰",
+    title: "Infrastructure Compiler",
+    description: "Compile ERP architectures into deployable runtime packages with validated APIs.",
+  },
+  {
+    tag: "Secure",
+    icon: "⬡",
+    title: "4-Stage Validation",
+    description: "Schema, graph integrity, permissions, and compliance checks before deployment.",
+  },
+  {
+    tag: "Event-Native",
+    icon: "⚡",
+    title: "Real-Time Events",
+    description: "Every state transition emits structured events to Redis Streams and WebSockets.",
+  },
+];
+
+const INSTITUTION_TYPES = [
+  {
+    icon: "🎓",
+    title: "Universities",
+    subtitle: "Comprehensive Institutional Infrastructure",
+    features: [
+      "Admissions & enrollment workflows",
+      "Academic progress tracking",
+      "Financial aid processing",
+      "Multi-departmental coordination",
+    ],
+    stat: "50+ workflows",
+    statLabel: "Pre-built templates",
+  },
+  {
+    icon: "🚀",
+    title: "EdTech Startups",
+    subtitle: "Rapid Institutional Logic Deployment",
+    features: [
+      "Launch institutional products faster",
+      "Focus on UI, not backend logic",
+      "Scale from MVP to enterprise",
+      "API-first integration",
+    ],
+    stat: "10x faster",
+    statLabel: "Time to market",
+  },
+];
+
+const PRICING_TIERS = [
+  {
+    name: "Free",
+    price: "$0",
+    period: "/month",
+    tagline: "For experimentation and learning",
+    features: ["10K API calls/month", "3 workflows", "Community support", "Basic templates"],
+    cta: "Get Started",
+    ctaHref: "/auth/signup",
+    highlighted: false,
+  },
+  {
+    name: "Pro",
+    price: "$99",
+    period: "/month",
+    tagline: "For production applications",
+    features: [
+      "500K API calls/month",
+      "Unlimited workflows",
+      "Priority support",
+      "All templates",
+      "GitHub sync",
+      "Custom domains",
+    ],
+    cta: "Start Free Trial",
+    ctaHref: "/auth/signup?plan=pro",
+    highlighted: true,
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    period: "",
+    tagline: "For large institutions",
+    features: [
+      "Unlimited API calls",
+      "Dedicated infrastructure",
+      "SLA guarantees",
+      "Custom integrations",
+      "Compliance support",
+      "On-premise option",
+    ],
+    cta: "Contact Sales",
+    ctaHref: "mailto:sales@orquestra.dev",
+    highlighted: false,
   },
 ];
 
 export default function LandingPage() {
   return (
-    <div className="bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <main className="mx-auto max-w-[1200px] px-4 pb-16 pt-32 sm:px-6">
-        <section className="relative overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-14 sm:px-12">
+    <div style={{ background: "#0f0f12", color: "#f4f4f5" }}>
+      {/* Hero */}
+      <section className="mx-auto max-w-[1200px] px-4 sm:px-6 pt-32 pb-20">
+        <div className="text-center">
           <div
-            className="pointer-events-none absolute inset-0 opacity-20"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)",
-              backgroundSize: "72px 72px",
-            }}
-          />
-          <div className="relative mx-auto max-w-4xl text-center">
-            <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-6xl">
-              Programmable Institutional
-              <br />
-              Workflow Infrastructure
-            </h1>
-            <p className="mx-auto mt-6 max-w-3xl text-lg text-[var(--text-secondary)] sm:text-3xl/9">
-              Define institutional logic as deterministic, versioned state machines. Deploy infrastructure, not admin
-              dashboards.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/console"
-                className="rounded-md border border-[var(--border-default)] bg-[var(--text-accent)] px-5 py-2 text-sm font-semibold text-[var(--bg-primary)]"
-              >
-                Launch Console
-              </Link>
-              <Link
-                href="/docs/introduction"
-                className="rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-5 py-2 text-sm text-[var(--text-secondary)]"
-              >
-                View Docs
-              </Link>
-            </div>
-            <div className="mx-auto mt-10 max-w-3xl rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 text-left text-lg text-[var(--text-secondary)]">
-              <span className="text-[var(--text-muted)]">&gt;_</span> admitflow deploy blueprint.json --env=production
-            </div>
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm mb-8 border"
+            style={{ borderColor: "#25252b", background: "#141418", color: "#a1a1aa" }}
+          >
+            <span style={{ color: "#3b82f6" }}>✦</span>
+            AI Infrastructure Generator
           </div>
-        </section>
 
-        <section id="product" className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold">Entry Surfaces</h2>
-          <div className="grid gap-3 md:grid-cols-3">
-            {ENTRY_SURFACES.map((surface) => (
-              <article
-                key={surface.title}
-                className="rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4"
-              >
-                <p className="text-lg font-medium text-[var(--text-primary)]">{surface.title}</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">{surface.description}</p>
-                <Link href={surface.href} className="mt-4 inline-block text-sm text-[var(--text-secondary)] underline">
-                  Open
-                </Link>
-              </article>
-            ))}
-          </div>
-        </section>
+          <h1
+            className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-6"
+            style={{ color: "#f4f4f5" }}
+          >
+            AI-Native Institutional
+            <br />
+            <span style={{ color: "#71717a" }}>ERP Infrastructure</span>
+          </h1>
 
-        <section id="primitives" className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold">Infrastructure Primitives</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {PRIMITIVES.map((primitive) => (
-              <article
-                key={primitive.title}
-                className="rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4"
-              >
-                <p className="text-lg font-medium text-[var(--text-primary)]">{primitive.title}</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">{primitive.description}</p>
-                <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-secondary)]">
-                  {primitive.snippet}
-                </pre>
-                <Link href={primitive.href} className="mt-3 inline-block text-sm text-[var(--text-secondary)] underline">
-                  View docs
-                </Link>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-10">
-          <AiCompilerDemo />
-        </section>
-
-        <section className="mt-10">
-          <ArchitectureBoard />
-        </section>
-
-        <section className="mt-10 rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-6 text-center">
-          <h3 className="text-2xl font-semibold text-[var(--text-primary)]">Build Infrastructure, Not Dashboards</h3>
-          <p className="mx-auto mt-3 max-w-3xl text-sm text-[var(--text-secondary)]">
-            AdmitFlow is headless-first institutional workflow infrastructure with deterministic execution, event-native
-            delivery, and human-approved AI compilation.
+          <p className="mx-auto max-w-2xl text-lg sm:text-xl mb-10" style={{ color: "#a1a1aa" }}>
+            Design your institutional ERP using AI, visualize architecture, version workflows, and deploy as programmable
+            infrastructure — synced directly to your codebase.
           </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
+
+          <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
             <Link
               href="/console"
-              className="rounded-md border border-[var(--border-default)] bg-[var(--text-accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-primary)]"
+              className="inline-flex items-center gap-2 rounded px-6 py-3 text-base font-semibold"
+              style={{ background: "#f4f4f5", color: "#0f0f12" }}
             >
-              Launch Console
+              Launch Console →
             </Link>
             <Link
-              href="/docs/introduction"
-              className="rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-2 text-sm text-[var(--text-secondary)]"
+              href="/architecture"
+              className="inline-flex items-center gap-2 rounded px-6 py-3 text-base border"
+              style={{ borderColor: "#25252b", color: "#a1a1aa" }}
             >
-              Read Docs
+              View Architecture
             </Link>
           </div>
-        </section>
-      </main>
+
+          {/* CLI demo */}
+          <div
+            className="mx-auto max-w-2xl rounded px-5 py-3.5 text-left text-base border font-mono"
+            style={{ background: "#141418", borderColor: "#25252b", color: "#a1a1aa" }}
+          >
+            <span style={{ color: "#a1a1aa" }}>&lt;/&gt; $ </span>
+            <span style={{ color: "#3b82f6" }}>orquestra</span>
+            <span style={{ color: "#f4f4f5" }}> generate </span>
+            <span style={{ color: "#86efac" }}>"University admissions + finance ERP"</span>
+            <span style={{ color: "#a1a1aa" }}> --deploy</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Infrastructure Primitives */}
+      <section id="product" className="mx-auto max-w-[1200px] px-4 sm:px-6 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ color: "#f4f4f5" }}>
+            Infrastructure Primitives
+          </h2>
+          <p className="text-lg" style={{ color: "#a1a1aa" }}>
+            Build institutional systems with composable, versioned infrastructure blocks
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {INFRA_PRIMITIVES.map((p) => (
+            <div
+              key={p.label}
+              className="rounded p-6 border"
+              style={{ background: "#141418", borderColor: "#25252b" }}
+            >
+              <div
+                className="w-10 h-10 rounded flex items-center justify-center text-lg mb-4"
+                style={{ background: `${p.color}18`, color: p.color }}
+              >
+                {p.icon}
+              </div>
+              <h3 className="text-lg font-semibold mb-2" style={{ color: "#f4f4f5" }}>
+                {p.label}
+              </h3>
+              <p className="text-sm leading-relaxed" style={{ color: "#8a8a94" }}>
+                {p.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Built for Developers */}
+      <section className="mx-auto max-w-[1200px] px-4 sm:px-6 py-16">
+        <div className="text-center mb-12">
+          <div
+            className="inline-block rounded-full px-4 py-1 text-sm mb-4 border"
+            style={{ borderColor: "#3b82f620", background: "#3b82f610", color: "#60a5fa" }}
+          >
+            Developer-First Platform
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ color: "#f4f4f5" }}>
+            Built for Developers,
+            <br />
+            Powered by AI
+          </h2>
+          <p className="text-lg" style={{ color: "#a1a1aa" }}>
+            Infrastructure-as-code meets AI-native design. Version everything, deploy instantly.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {DEVELOPER_FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="rounded p-5 border"
+              style={{ background: "#141418", borderColor: "#25252b" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xl" style={{ color: "#3b82f6" }}>
+                  {f.icon}
+                </span>
+                <span
+                  className="text-[11px] px-2 py-0.5 rounded-full border"
+                  style={{ borderColor: "#25252b", color: "#8a8a94" }}
+                >
+                  {f.tag}
+                </span>
+              </div>
+              <h3 className="text-base font-semibold mb-1.5" style={{ color: "#f4f4f5" }}>
+                {f.title}
+              </h3>
+              <p className="text-sm" style={{ color: "#8a8a94" }}>
+                {f.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Built for Institutional Systems */}
+      <section className="mx-auto max-w-[1200px] px-4 sm:px-6 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ color: "#f4f4f5" }}>
+            Built for Institutional Systems
+          </h2>
+          <p className="text-lg" style={{ color: "#a1a1aa" }}>
+            From universities to EdTech startups, deploy production-ready infrastructure
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {INSTITUTION_TYPES.map((inst) => (
+            <div
+              key={inst.title}
+              className="rounded p-7 border"
+              style={{ background: "#141418", borderColor: "#25252b" }}
+            >
+              <div
+                className="w-12 h-12 rounded flex items-center justify-center text-2xl mb-4"
+                style={{ background: "#1e1e24" }}
+              >
+                {inst.icon}
+              </div>
+              <h3 className="text-2xl font-bold mb-1" style={{ color: "#f4f4f5" }}>
+                {inst.title}
+              </h3>
+              <p className="text-sm mb-5" style={{ color: "#8a8a94" }}>
+                {inst.subtitle}
+              </p>
+              <ul className="space-y-2 mb-6">
+                {inst.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm" style={{ color: "#a1a1aa" }}>
+                    <span style={{ color: "#3b82f6", flexShrink: 0 }}>•</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <div className="border-t pt-4" style={{ borderColor: "#25252b" }}>
+                <span className="text-2xl font-bold" style={{ color: "#f4f4f5" }}>
+                  {inst.stat}
+                </span>
+                <span className="text-sm ml-2" style={{ color: "#8a8a94" }}>
+                  {inst.statLabel}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="mx-auto max-w-[1200px] px-4 sm:px-6 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ color: "#f4f4f5" }}>
+            Simple, Usage-Based Pricing
+          </h2>
+          <p className="text-lg" style={{ color: "#a1a1aa" }}>
+            Start free, scale as you grow. No hidden fees.
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {PRICING_TIERS.map((tier) => (
+            <div
+              key={tier.name}
+              className="rounded p-6 border relative"
+              style={{
+                background: tier.highlighted ? "#141418" : "#141418",
+                borderColor: tier.highlighted ? "#3b82f6" : "#25252b",
+                boxShadow: tier.highlighted ? "0 0 0 1px #3b82f620" : "none",
+              }}
+            >
+              {tier.highlighted && (
+                <div
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs px-3 py-1 rounded-full font-semibold"
+                  style={{ background: "#3b82f6", color: "#fff" }}
+                >
+                  Most Popular
+                </div>
+              )}
+              <div className="mb-4">
+                <h3 className="text-lg font-bold mb-1" style={{ color: "#f4f4f5" }}>
+                  {tier.name}
+                </h3>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-bold" style={{ color: "#f4f4f5" }}>
+                    {tier.price}
+                  </span>
+                  {tier.period && (
+                    <span className="text-sm" style={{ color: "#8a8a94" }}>
+                      {tier.period}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm mt-1" style={{ color: "#8a8a94" }}>
+                  {tier.tagline}
+                </p>
+              </div>
+              <ul className="space-y-2 mb-6">
+                {tier.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm" style={{ color: "#a1a1aa" }}>
+                    <span style={{ color: "#3b82f6" }}>✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href={tier.ctaHref}
+                className="block w-full text-center rounded py-2.5 text-sm font-semibold border transition-all"
+                style={
+                  tier.highlighted
+                    ? { background: "#3b82f6", color: "#fff", borderColor: "#3b82f6" }
+                    : { background: "transparent", color: "#f4f4f5", borderColor: "#25252b" }
+                }
+              >
+                {tier.cta}
+              </Link>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-sm mt-6" style={{ color: "#8a8a94" }}>
+          <Link href="/#pricing" style={{ color: "#a1a1aa" }}>
+            View detailed pricing and FAQ →
+          </Link>
+        </p>
+      </section>
 
       <LandingFooter />
     </div>

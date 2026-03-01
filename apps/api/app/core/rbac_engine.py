@@ -21,6 +21,10 @@ DEFAULT_PERMISSIONS: dict[str, set[str]] = {
         "event:read",
         "blueprint:compile",
         "blueprint:deploy",
+        "api_key:read",
+        "api_key:write",
+        "template:read",
+        "template:deploy",
     },
     "reviewer": {
         "project:read",
@@ -29,8 +33,15 @@ DEFAULT_PERMISSIONS: dict[str, set[str]] = {
         "application:write",
         "event:read",
         "blueprint:compile",
+        "template:read",
     },
-    "viewer": {"project:read", "workflow:read", "application:read", "event:read"},
+    "viewer": {
+        "project:read",
+        "workflow:read",
+        "application:read",
+        "event:read",
+        "template:read",
+    },
 }
 
 

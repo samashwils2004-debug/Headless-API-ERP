@@ -5,9 +5,9 @@ export function LandingFooter() {
     <footer className="border-t border-[var(--border-default)] bg-[var(--bg-secondary)]">
       <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-12 sm:grid-cols-4 sm:px-6">
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-[var(--text-primary)]">AdmitFlow</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Orquestra</p>
           <p className="text-sm text-[var(--text-secondary)]">
-            Deterministic, event-native institutional workflow infrastructure.
+            AI-native institutional ERP infrastructure. Deterministic. Event-native. Composable.
           </p>
         </div>
 
@@ -42,7 +42,7 @@ export function LandingFooter() {
         </div>
       </div>
       <div className="border-t border-[var(--border-default)] py-4 text-center text-xs text-[var(--text-muted)]">
-        AdmitFlow Control Plane - 2026
+        Orquestra — Institutional Runtime © 2026
       </div>
     </footer>
   );
