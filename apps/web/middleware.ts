@@ -1,7 +1,27 @@
-﻿import type { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // ─── Auth Guard ────────────────────────────────────────────────────────────
+  const accessToken = request.cookies.get("access_token")?.value;
+
+  // Redirect unauthenticated users away from the console
+  if (pathname.startsWith("/console")) {
+    if (!accessToken) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // Redirect already-authenticated users away from the login page
+  if (pathname === "/login" && accessToken) {
+    return NextResponse.redirect(new URL("/console", request.url));
+  }
+
+  // ─── Security Headers ──────────────────────────────────────────────────────
   const response = NextResponse.next();
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "";

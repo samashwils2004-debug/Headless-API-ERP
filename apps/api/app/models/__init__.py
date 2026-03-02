@@ -187,3 +187,61 @@ class WorkflowTemplate(Base):
     compliance_tags = Column(JSON, nullable=False, default=list)
     definition = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=utcnow_naive, nullable=False)
+
+
+class InstitutionArchitecture(Base):
+    """ERP domain graph for an institution project (Mode B — Architect AI)."""
+    __tablename__ = "institution_architectures"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "project_id", name="uq_architecture_per_project"),
+    )
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    institution_id = Column(String, ForeignKey("institutions.id"), nullable=False, index=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False, default="Institutional ERP")
+    graph_json = Column(JSON, nullable=False, default=dict)
+    visualization_config = Column(JSON, nullable=False, default=dict)
+    version = Column(Integer, nullable=False, default=1)
+    created_by = Column(String, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=utcnow_naive, nullable=False)
+    updated_at = Column(DateTime, default=utcnow_naive, nullable=False, onupdate=utcnow_naive)
+
+    institution = relationship("Institution", backref="architectures")
+    project = relationship("Project", backref="architectures")
+
+
+class ArchitectureVersion(Base):
+    """Immutable version record for each architecture change."""
+    __tablename__ = "architecture_versions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    architecture_id = Column(String, ForeignKey("institution_architectures.id"), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    prompt = Column(Text, nullable=False, default="")
+    graph_snapshot = Column(JSON, nullable=False, default=dict)
+    diff_summary = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=utcnow_naive, nullable=False)
+
+    architecture = relationship("InstitutionArchitecture", backref="versions")
+
+
+class TemplateCustomization(Base):
+    """AI-generated customization proposal for a workflow template (Mode C)."""
+    __tablename__ = "template_customizations"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    template_id = Column(String, ForeignKey("workflow_templates.id"), nullable=False, index=True)
+    institution_id = Column(String, ForeignKey("institutions.id"), nullable=False, index=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+    instruction = Column(Text, nullable=False)
+    modified_definition = Column(JSON, nullable=False)
+    diff_json = Column(JSON, nullable=False, default=dict)
+    validation_result = Column(JSON, nullable=False, default=dict)
+    change_summary = Column(Text, nullable=False, default="")
+    provider_used = Column(String(64), nullable=False, default="unknown")
+    is_mock = Column(Boolean, default=False, nullable=False)
+    created_by = Column(String, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=utcnow_naive, nullable=False)
+
+    template = relationship("WorkflowTemplate", backref="customizations")

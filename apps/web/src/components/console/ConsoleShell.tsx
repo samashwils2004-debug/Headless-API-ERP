@@ -8,7 +8,6 @@ import {
   FolderKanban,
   Layers,
   GitBranch,
-  Sparkles,
   Radio,
   KeyRound,
   Settings,
@@ -24,7 +23,6 @@ const NAV = [
   { href: "/console/projects", label: "Projects", icon: FolderKanban },
   { href: "/console/templates", label: "Templates", icon: Layers },
   { href: "/console/workflows", label: "Workflows", icon: GitBranch },
-  { href: "/console/ai", label: "AI Generator", icon: Sparkles },
   { href: "/console/architect", label: "Architect", icon: PenTool },
   { href: "/console/events", label: "Event Stream", icon: Radio },
   { href: "/console/api-keys", label: "API Keys", icon: KeyRound },
@@ -108,14 +106,6 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                   style={active ? { color: "#e4e4e7" } : { color: "#71717a" }}
                 />
                 {label}
-                {label === "AI Generator" && (
-                  <span
-                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium"
-                    style={{ background: "#1e1030", color: "#a855f7" }}
-                  >
-                    AI
-                  </span>
-                )}
               </Link>
             );
           })}

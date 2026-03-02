@@ -12,7 +12,7 @@ from app.database import init_db
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.observability import metrics_response, record_http_metrics
 from app.routes import ai, applications, auth, events, projects, workflows
-from app.routes import api_keys, templates
+from app.routes import api_keys, templates, architect
 from app.ws import hub
 
 settings = get_settings()
@@ -109,6 +109,7 @@ app.include_router(events.router, prefix="/api", tags=["events"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
 app.include_router(api_keys.router, prefix="/api", tags=["api-keys"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
+app.include_router(architect.router, prefix="/api", tags=["architect"])
 
 
 @app.get("/health")

@@ -166,3 +166,60 @@ class TemplateResponse(BaseModel):
 
 class TemplateListResponse(BaseModel):
     templates: list[TemplateResponse]
+
+
+class TemplateDetailResponse(TemplateResponse):
+    definition: dict[str, Any]
+
+
+# ── Architect (Mode B) schemas ────────────────────────────────────────────────
+
+class ArchitectureCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255, default="Institutional ERP")
+
+
+class ArchitectureResponse(BaseModel):
+    id: str
+    institution_id: str
+    project_id: str
+    name: str
+    graph_json: dict[str, Any]
+    visualization_config: dict[str, Any]
+    version: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ArchitectureVersionResponse(BaseModel):
+    id: str
+    architecture_id: str
+    version: int
+    prompt: str
+    diff_summary: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PromptRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=2000)
+
+
+class LinkWorkflowRequest(BaseModel):
+    domain_id: str = Field(min_length=1)
+    workflow_id: str = Field(min_length=1)
+    workflow_name: str = Field(min_length=1)
+
+
+# ── Template customization (Mode C) schemas ───────────────────────────────────
+
+class TemplateCustomizeRequest(BaseModel):
+    instruction: str = Field(min_length=1, max_length=2000)
+
+
+class TemplateCustomizeResponse(BaseModel):
+    customization_id: str
+    diff: dict[str, Any]
+    validation: dict[str, Any]
+    change_summary: str
+    is_mock: bool = False

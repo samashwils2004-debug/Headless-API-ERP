@@ -152,3 +152,160 @@ export async function deployBlueprint(tenant: TenantContext, proposalId: string)
   });
   return parse<{ name: string; definition: Record<string, unknown>; is_ai_generated: boolean }>(response);
 }
+
+// ── Template types ──────────────────────────────────────────────────────────
+
+export type TemplateItem = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  compliance_tags: string[];
+};
+
+export type TemplateDetail = TemplateItem & {
+  definition: Record<string, unknown>;
+};
+
+export type CustomizeResult = {
+  customization_id: string;
+  diff: {
+    changed_conditions: Array<{ transition: string; before: string; after: string }>;
+    added_states: string[];
+    removed_states: string[];
+    summary: string;
+  };
+  validation: {
+    schema: { passed: boolean; errors: string[] };
+    graph: { passed: boolean; errors: string[] };
+    permissions: { passed: boolean; errors: string[] };
+    compliance: { passed: boolean; errors: string[] };
+    all_passed: boolean;
+  };
+  change_summary: string;
+  is_mock: boolean;
+};
+
+// ── Architect types ─────────────────────────────────────────────────────────
+
+export type ArchitectureItem = {
+  id: string;
+  institution_id: string;
+  project_id: string;
+  name: string;
+  graph_json: Record<string, unknown>;
+  visualization_config: Record<string, unknown>;
+  version: number;
+};
+
+export type ArchitectureVersionItem = {
+  id: string;
+  architecture_id: string;
+  version: number;
+  prompt: string;
+  diff_summary: string;
+  created_at: string;
+};
+
+// ── Template API functions ───────────────────────────────────────────────────
+
+export async function listTemplates(tenant: TenantContext, category?: string) {
+  const url = category ? `/api/templates?category=${encodeURIComponent(category)}` : "/api/templates";
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ templates: TemplateItem[] }>(response);
+}
+
+export async function getTemplate(tenant: TenantContext, id: string) {
+  const response = await fetch(`/api/templates/${id}`, {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<TemplateDetail>(response);
+}
+
+export async function deployTemplate(tenant: TenantContext, templateId: string) {
+  const response = await fetch(`/api/templates/${templateId}/deploy`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ id: string; name: string; version: number; message: string }>(response);
+}
+
+export async function customizeTemplate(tenant: TenantContext, id: string, instruction: string) {
+  const response = await fetch(`/api/templates/${id}/customize`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify({ instruction }),
+  });
+  return parse<CustomizeResult>(response);
+}
+
+// ── Architect API functions ──────────────────────────────────────────────────
+
+export async function getOrCreateArchitecture(tenant: TenantContext): Promise<ArchitectureItem> {
+  const listRes = await fetch("/api/architect", {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  const listData = await parse<{ architectures: ArchitectureItem[] }>(listRes);
+  if (listData.architectures.length > 0) {
+    return listData.architectures[0];
+  }
+  const createRes = await fetch("/api/architect", {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify({ name: "Institutional ERP" }),
+  });
+  return parse<ArchitectureItem>(createRes);
+}
+
+export async function applyArchitectPrompt(tenant: TenantContext, archId: string, prompt: string) {
+  const response = await fetch(`/api/architect/${archId}/prompt`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify({ prompt }),
+  });
+  return parse<{
+    intent: string;
+    confidence: number;
+    message: string;
+    suggested_action: string;
+    pre_fill_prompt: string;
+    architecture: ArchitectureItem | null;
+    diff_summary: string;
+    is_mock: boolean;
+  }>(response);
+}
+
+export async function linkWorkflowToDomain(
+  tenant: TenantContext,
+  archId: string,
+  body: { domain_id: string; workflow_id: string; workflow_name: string }
+) {
+  const response = await fetch(`/api/architect/${archId}/link-workflow`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify(body),
+  });
+  return parse<ArchitectureItem>(response);
+}
+
+export async function getAvailableWorkflows(tenant: TenantContext, archId: string) {
+  const response = await fetch(`/api/architect/${archId}/available-workflows`, {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ workflows: Array<{ id: string; name: string; version: number }> }>(response);
+}
+
+export async function getArchitectureVersions(tenant: TenantContext, archId: string) {
+  const response = await fetch(`/api/architect/${archId}/versions`, {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ versions: ArchitectureVersionItem[] }>(response);
+}

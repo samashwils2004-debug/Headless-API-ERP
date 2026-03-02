@@ -4,14 +4,22 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.ai.template_customizer import TemplateCustomizer
 from app.core.rbac_engine import check_permission
 from app.database import get_db
-from app.models import WorkflowTemplate, Workflow
-from app.schemas import TemplateListResponse, TemplateResponse
+from app.models import WorkflowTemplate, Workflow, TemplateCustomization
+from app.schemas import (
+    TemplateListResponse,
+    TemplateResponse,
+    TemplateDetailResponse,
+    TemplateCustomizeRequest,
+    TemplateCustomizeResponse,
+)
 from app.security import get_current_user
 from app.tenant import get_tenant_context
 
 router = APIRouter()
+_customizer = TemplateCustomizer()
 
 
 @router.get("/templates", response_model=TemplateListResponse)
@@ -25,6 +33,58 @@ def list_templates(
         query = query.filter(WorkflowTemplate.category == category)
     templates = query.order_by(WorkflowTemplate.name).all()
     return {"templates": [TemplateResponse.model_validate(t) for t in templates]}
+
+
+@router.get("/templates/{template_id}", response_model=TemplateDetailResponse)
+def get_template(
+    template_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    template = db.query(WorkflowTemplate).filter(WorkflowTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return TemplateDetailResponse.model_validate(template)
+
+
+@router.post("/templates/{template_id}/customize", response_model=TemplateCustomizeResponse)
+def customize_template(
+    template_id: str,
+    body: TemplateCustomizeRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    tenant=Depends(get_tenant_context),
+):
+    template = db.query(WorkflowTemplate).filter(WorkflowTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    result = _customizer.customize(template.definition, body.instruction)
+
+    customization = TemplateCustomization(
+        template_id=template_id,
+        institution_id=tenant.institution_id,
+        project_id=tenant.project_id,
+        instruction=body.instruction,
+        modified_definition=result["modified_definition"],
+        diff_json=result["diff"],
+        validation_result=result["validation"],
+        change_summary=result["change_summary"],
+        provider_used=result["provider_used"],
+        is_mock=result["is_mock"],
+        created_by=current_user.id,
+    )
+    db.add(customization)
+    db.commit()
+    db.refresh(customization)
+
+    return TemplateCustomizeResponse(
+        customization_id=customization.id,
+        diff=result["diff"],
+        validation=result["validation"],
+        change_summary=result["change_summary"],
+        is_mock=result["is_mock"],
+    )
 
 
 @router.post("/templates/{template_id}/deploy", status_code=201)
