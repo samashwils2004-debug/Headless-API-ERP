@@ -12,6 +12,7 @@ import {
   KeyRound,
   Settings,
   ChevronDown,
+  Sparkles,
   PenTool
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ const NAV = [
   { href: "/console/projects", label: "Projects", icon: FolderKanban },
   { href: "/console/templates", label: "Templates", icon: Layers },
   { href: "/console/workflows", label: "Workflows", icon: GitBranch },
+  { href: "/console/ai", label: "AI Generator", icon: Sparkles },
   { href: "/console/architect", label: "Architect", icon: PenTool },
   { href: "/console/events", label: "Event Stream", icon: Radio },
   { href: "/console/api-keys", label: "API Keys", icon: KeyRound },

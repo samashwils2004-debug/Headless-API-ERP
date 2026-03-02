@@ -1,486 +1,299 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  Sparkles,
-  History,
-  Undo2,
-  Link as LinkIcon,
-  X,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  ChevronRight,
-} from "lucide-react";
+import { useState } from "react";
+import { Building2, Wand2, ChevronRight, GitBranch, Layers, Clock } from "lucide-react";
+import { toast } from "sonner";
 
-import {
-  applyArchitectPrompt,
-  getArchitectureVersions,
-  getAvailableWorkflows,
-  getOrCreateArchitecture,
-  linkWorkflowToDomain,
-  type ArchitectureItem,
-  type ArchitectureVersionItem,
-} from "@/lib/console-api";
-import { useProjectContextStore } from "@/lib/stores/project-context-store";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// ── Domain card ────────────────────────────────────────────────────────────
-
-type DomainViz = {
-  domain_id: string;
-  domain_name: string;
-  domain_type: string;
-  style: { accent: string; bg: string; border: string };
-  status: "linked" | "draft" | "unlinked";
-  linked_workflow_name: string | null;
-  modules: string[];
-};
-
-function statusLabel(status: string) {
-  if (status === "linked") return { text: "LIVE", bg: "#0a1a0a", color: "#86efac", border: "#1a3a1a" };
-  if (status === "draft") return { text: "DRAFT", bg: "#1a1200", color: "#fbbf24", border: "#3a2a00" };
-  return { text: "UNLINKED", bg: "#141418", color: "#71717a", border: "#25252b" };
+interface ArchitectureVersion {
+  id: string;
+  version: number;
+  prompt: string;
+  created_at: string;
+  status: "draft" | "compiled" | "deployed";
 }
 
-function DomainCard({
-  domain,
-  onLink,
-}: {
-  domain: DomainViz;
-  onLink: (domainId: string) => void;
-}) {
-  const st = statusLabel(domain.status);
+function getAuthHeaders() {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+const EXAMPLE_PROMPTS = [
+  "University with admissions, financial aid, and academic records management",
+  "EdTech platform with course enrollment, progress tracking, and certification",
+  "Corporate HR system with hiring, onboarding, and performance reviews",
+];
+
+const cardStyle = { background: "#141418", borderColor: "#25252b" };
+
+export default function ArchitectPage() {
+  const [prompt, setPrompt] = useState("");
+  const [institutionType, setInstitutionType] = useState("university");
+  const [institutionSize, setInstitutionSize] = useState("medium");
+  const [complianceTags, setComplianceTags] = useState<string[]>(["FERPA"]);
+  const [generating, setGenerating] = useState(false);
+  const [versions, setVersions] = useState<ArchitectureVersion[]>([]);
+  const [activeVersion, setActiveVersion] = useState<ArchitectureVersion | null>(null);
+
+  const toggleTag = (tag: string) => {
+    setComplianceTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  async function generate() {
+    if (!prompt.trim()) { toast.error("Enter a description first"); return; }
+    setGenerating(true);
+    try {
+      const authHeaders = getAuthHeaders();
+      const res = await fetch(`${API_BASE}/api/ai/blueprints/compile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders } as HeadersInit,
+        credentials: "include",
+        body: JSON.stringify({
+          prompt,
+          institution_context: {
+            institution_type: institutionType,
+            institution_size: institutionSize,
+            compliance_tags: complianceTags,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || "Generation failed");
+      const data = await res.json();
+
+      const newVersion: ArchitectureVersion = {
+        id: data.id,
+        version: versions.length + 1,
+        prompt,
+        created_at: new Date().toISOString(),
+        status: data.status === "validated" ? "compiled" : "draft",
+      };
+      setVersions((v) => [newVersion, ...v]);
+      setActiveVersion(newVersion);
+      toast.success(`Architecture v${newVersion.version} generated`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
-    <div
-      className="rounded-lg p-4 flex flex-col gap-3 relative"
-      style={{ background: domain.style.bg || "#1b1b24", border: `1px solid ${domain.style.border || "#25252b"}` }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ background: domain.style.accent || "#a1a1aa" }} />
-          <span className="text-sm font-semibold" style={{ color: "#f4f4f5" }}>{domain.domain_name}</span>
+    <div className="max-w-6xl space-y-6">
+      <div className="flex items-center gap-3">
+        <Building2 size={22} style={{ color: "#3b82f6" }} />
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "#f4f4f5" }}>Architect</h1>
+          <p className="text-sm" style={{ color: "#8a8a94" }}>
+            Institutional Architecture Layer — design ERP through iterative natural language
+          </p>
         </div>
         <span
-          className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-          style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}` }}
+          className="ml-2 text-xs px-2 py-0.5 rounded border"
+          style={{ borderColor: "#3b82f630", background: "#3b82f610", color: "#60a5fa" }}
         >
-          {st.text}
+          IAL
         </span>
       </div>
 
-      {/* Modules */}
-      {domain.modules.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {domain.modules.slice(0, 3).map((m) => (
-            <span key={m} className="text-[10px] px-1.5 py-0.5 rounded"
-              style={{ background: "#141418", color: "#71717a", border: "1px solid #1c1c22" }}>
-              {m}
-            </span>
-          ))}
-          {domain.modules.length > 3 && (
-            <span className="text-[10px] px-1 py-0.5 rounded" style={{ color: "#52525b" }}>
-              +{domain.modules.length - 3}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Linked workflow */}
-      {domain.status === "linked" && domain.linked_workflow_name && (
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "#86efac" }}>
-          <CheckCircle2 size={11} />
-          <span className="truncate">{domain.linked_workflow_name}</span>
-        </div>
-      )}
-
-      {/* Link button */}
-      {domain.status === "unlinked" && (
-        <button
-          onClick={() => onLink(domain.domain_id)}
-          className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded transition-colors self-start"
-          style={{ background: "#1e1e24", color: "#a1a1aa", border: "1px solid #25252b" }}
-        >
-          <LinkIcon size={11} />Link workflow →
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Link workflow modal ────────────────────────────────────────────────────
-
-function LinkModal({
-  domainId,
-  archId,
-  tenant,
-  onClose,
-  onLinked,
-}: {
-  domainId: string;
-  archId: string;
-  tenant: { institutionId: string; projectId: string };
-  onClose: () => void;
-  onLinked: (arch: ArchitectureItem) => void;
-}) {
-  const [workflows, setWorkflows] = useState<Array<{ id: string; name: string; version: number }>>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedWf, setSelectedWf] = useState<string>("");
-  const [linking, setLinking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getAvailableWorkflows(tenant, archId)
-      .then((d) => { setWorkflows(d.workflows); if (d.workflows.length > 0) setSelectedWf(d.workflows[0].id); })
-      .catch(() => setWorkflows([]))
-      .finally(() => setLoading(false));
-  }, [archId]);
-
-  const handleLink = async () => {
-    const wf = workflows.find((w) => w.id === selectedWf);
-    if (!wf) return;
-    setLinking(true); setError(null);
-    try {
-      const arch = await linkWorkflowToDomain(tenant, archId, {
-        domain_id: domainId,
-        workflow_id: wf.id,
-        workflow_name: wf.name,
-      });
-      onLinked(arch);
-      onClose();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to link");
-    } finally {
-      setLinking(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose} />
-      <div className="relative z-10 w-96 rounded-xl p-5 space-y-4" style={{ background: "#1b1b24", border: "1px solid #3f3f46" }}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold" style={{ color: "#f4f4f5" }}>Link Workflow to Domain</h3>
-          <button onClick={onClose} style={{ color: "#71717a" }}><X size={16} /></button>
-        </div>
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm py-4" style={{ color: "#71717a" }}>
-            <Loader2 size={14} className="animate-spin" />Loading deployed workflows…
-          </div>
-        ) : workflows.length === 0 ? (
-          <p className="text-sm py-4" style={{ color: "#71717a" }}>
-            No deployed workflows found. Deploy a workflow first from the Workflows page.
-          </p>
-        ) : (
-          <>
-            <div className="space-y-1">
-              <label className="text-xs font-medium" style={{ color: "#a1a1aa" }}>Select Workflow</label>
-              <select className="w-full rounded px-3 py-2 text-sm outline-none"
-                style={{ background: "#141418", border: "1px solid #25252b", color: "#f4f4f5" }}
-                value={selectedWf} onChange={(e) => setSelectedWf(e.target.value)}>
-                {workflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>{wf.name} v{wf.version}</option>
-                ))}
-              </select>
-            </div>
-            {error && (
-              <div className="flex items-center gap-2 rounded px-3 py-2 text-sm"
-                style={{ background: "#1a0a0a", color: "#fca5a5", border: "1px solid #3a1a1a" }}>
-                <AlertCircle size={13} />{error}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+        {/* Main panel */}
+        <div className="space-y-4">
+          {/* Institution Context */}
+          <div className="rounded-lg border p-5" style={cardStyle}>
+            <h3 className="text-sm font-medium mb-4" style={{ color: "#f4f4f5" }}>Institution Context</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8a94" }}>Type</label>
+                <select
+                  value={institutionType}
+                  onChange={(e) => setInstitutionType(e.target.value)}
+                  className="w-full rounded px-3 py-2 text-sm outline-none"
+                  style={{ background: "#0f0f12", border: "1px solid #25252b", color: "#f4f4f5" }}
+                >
+                  <option value="university">University</option>
+                  <option value="college">College</option>
+                  <option value="edtech">EdTech</option>
+                  <option value="corporate">Corporate</option>
+                  <option value="government">Government</option>
+                </select>
               </div>
-            )}
-            <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="px-3 py-1.5 rounded text-sm" style={{ color: "#71717a" }}>Cancel</button>
-              <button onClick={handleLink} disabled={!selectedWf || linking}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium disabled:opacity-50"
-                style={{ background: "#3b82f6", color: "#fff" }}>
-                {linking ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} />}
-                Link
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8a94" }}>Size</label>
+                <select
+                  value={institutionSize}
+                  onChange={(e) => setInstitutionSize(e.target.value)}
+                  className="w-full rounded px-3 py-2 text-sm outline-none"
+                  style={{ background: "#0f0f12", border: "1px solid #25252b", color: "#f4f4f5" }}
+                >
+                  <option value="small">Small (&lt;1K users)</option>
+                  <option value="medium">Medium (1K–10K)</option>
+                  <option value="large">Large (&gt;10K)</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs mb-2" style={{ color: "#8a8a94" }}>Compliance Requirements</label>
+              <div className="flex gap-2 flex-wrap">
+                {["FERPA", "GDPR", "DPDP", "HIPAA", "SOC2"].map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    className="rounded px-2.5 py-1 text-xs border font-mono transition-colors"
+                    style={
+                      complianceTags.includes(tag)
+                        ? { background: "#1e3a5f", borderColor: "#3b82f6", color: "#60a5fa" }
+                        : { background: "transparent", borderColor: "#25252b", color: "#71717a" }
+                    }
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Prompt */}
+          <div className="rounded-lg border p-5" style={cardStyle}>
+            <h3 className="text-sm font-medium mb-3" style={{ color: "#f4f4f5" }}>Describe Your ERP</h3>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Describe the institutional workflows you need — e.g. 'University with undergraduate admissions, merit scholarship processing, and student enrollment tracking...'"
+              rows={5}
+              maxLength={2000}
+              className="w-full rounded px-3 py-2.5 text-sm outline-none resize-none"
+              style={{ background: "#0f0f12", border: "1px solid #25252b", color: "#f4f4f5" }}
+            />
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs" style={{ color: "#52525b" }}>{prompt.length}/2000</p>
+              <button
+                onClick={generate}
+                disabled={generating || !prompt.trim()}
+                className="flex items-center gap-2 rounded px-5 py-2 text-sm font-semibold transition-all disabled:opacity-50"
+                style={{ background: generating ? "#1e3a5f" : "#3b82f6", color: "#fff" }}
+              >
+                <Wand2 size={14} />
+                {generating ? "Generating…" : "Generate Architecture"}
               </button>
             </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
-// ── Version history timeline ───────────────────────────────────────────────
-
-function VersionHistory({ versions }: { versions: ArchitectureVersionItem[] }) {
-  return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {versions.length === 0 && (
-        <p className="text-xs text-center py-4" style={{ color: "#52525b" }}>No versions yet</p>
-      )}
-      {versions.map((v, i) => (
-        <div key={v.id}
-          className={`relative pl-4 ${i !== versions.length - 1 ? "pb-4" : ""}`}
-          style={i !== versions.length - 1 ? { borderLeft: "1px solid #25252b" } : {}}>
-          <div className={`absolute top-0 -left-[5px] w-2.5 h-2.5 rounded-full ${i === 0 ? "ring-2 ring-blue-500/30" : ""}`}
-            style={{ background: i === 0 ? "#3b82f6" : "#3f3f46", border: i === 0 ? "" : "1px solid #52525b" }} />
-          <div className="text-xs font-medium" style={{ color: "#f4f4f5" }}>v{v.version}</div>
-          <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "#a1a1aa" }}>{v.diff_summary || v.prompt?.slice(0, 80) || "—"}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: "#52525b" }}>
-            {new Date(v.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Main page ──────────────────────────────────────────────────────────────
-
-export default function ArchitectPage() {
-  const context = useProjectContextStore((s) => s.context);
-  const tenant = { institutionId: context.institutionId, projectId: context.projectId };
-
-  const [architecture, setArchitecture] = useState<ArchitectureItem | null>(null);
-  const [versions, setVersions] = useState<ArchitectureVersionItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [prompt, setPrompt] = useState("");
-  const [applying, setApplying] = useState(false);
-  const [promptResult, setPromptResult] = useState<{
-    intent: string; message: string; suggested_action: string; is_mock: boolean;
-  } | null>(null);
-  const [promptError, setPromptError] = useState<string | null>(null);
-
-  const [linkDomainId, setLinkDomainId] = useState<string | null>(null);
-
-  const loadVersions = useCallback(async (archId: string) => {
-    try {
-      const d = await getArchitectureVersions(tenant, archId);
-      setVersions(d.versions);
-    } catch { setVersions([]); }
-  }, [context.institutionId, context.projectId]);
-
-  useEffect(() => {
-    if (!context.institutionId || !context.projectId) return;
-    setLoading(true);
-    setLoadError(null);
-    getOrCreateArchitecture(tenant)
-      .then((arch) => {
-        setArchitecture(arch);
-        return loadVersions(arch.id);
-      })
-      .catch((e: unknown) => {
-        setLoadError(e instanceof Error ? e.message : "Failed to load architecture");
-      })
-      .finally(() => setLoading(false));
-  }, [context.institutionId, context.projectId]);
-
-  const handlePrompt = async () => {
-    if (!prompt.trim() || !architecture) return;
-    setApplying(true);
-    setPromptResult(null);
-    setPromptError(null);
-    try {
-      const r = await applyArchitectPrompt(tenant, architecture.id, prompt);
-      if (r.architecture) setArchitecture(r.architecture);
-      setPromptResult({ intent: r.intent, message: r.message, suggested_action: r.suggested_action, is_mock: r.is_mock });
-      setPrompt("");
-      await loadVersions(architecture.id);
-    } catch (e: unknown) {
-      setPromptError(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  const handleLinked = (arch: ArchitectureItem) => {
-    setArchitecture(arch);
-    loadVersions(arch.id);
-  };
-
-  const vizConfig = architecture?.visualization_config as {
-    domains?: DomainViz[];
-    connections?: Array<{ from: string; to: string; label?: string }>;
-    layout?: string;
-  } | null;
-
-  const domains: DomainViz[] = vizConfig?.domains || [];
-
-  const gridCols = domains.length <= 2 ? "grid-cols-2" : domains.length <= 4 ? "grid-cols-2" : "grid-cols-3";
-
-  return (
-    <div className="flex flex-col h-[calc(100vh-120px)] overflow-hidden gap-0">
-      {/* Header */}
-      <div className="flex-none flex items-center justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold" style={{ color: "#f4f4f5" }}>Institutional Architect</h2>
-            {architecture && (
-              <span className="text-xs px-2 py-0.5 rounded font-medium"
-                style={{ background: "#1e1e24", color: "#a1a1aa", border: "1px solid #25252b" }}>
-                v{architecture.version}
-              </span>
-            )}
-          </div>
-          <p className="text-sm mt-0.5" style={{ color: "#71717a" }}>NLP-driven ERP domain composition</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {architecture && (
-            <span className="text-xs px-2 py-0.5 rounded"
-              style={{ background: "#141418", color: "#71717a", border: "1px solid #25252b" }}>
-              {architecture.name}
-            </span>
-          )}
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors"
-            style={{ background: "#1b1b24", color: "#71717a", border: "1px solid #25252b" }}
-            onClick={() => {
-              if (!architecture) return;
-              setLoading(true);
-              getOrCreateArchitecture(tenant).then(setArchitecture).finally(() => setLoading(false));
-            }}
-          >
-            <Undo2 size={13} />Revert
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* Canvas */}
-        <div className="flex-1 flex flex-col rounded-xl overflow-hidden relative"
-          style={{ background: "#0f0f12", border: "1px solid #25252b" }}>
-          {/* Canvas header */}
-          <div className="flex-none flex items-center justify-between px-4 py-3"
-            style={{ background: "#141418", borderBottom: "1px solid #25252b" }}>
-            <span className="text-sm font-medium" style={{ color: "#a1a1aa" }}>ERP Architecture Map</span>
-            {vizConfig?.layout && (
-              <span className="text-xs" style={{ color: "#52525b" }}>{vizConfig.layout} layout</span>
-            )}
-          </div>
-
-          {/* Domain grid */}
-          <div className="flex-1 overflow-auto p-6 relative">
-            {/* Dot grid background */}
-            <div className="absolute inset-0 opacity-5" style={{
-              backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)",
-              backgroundSize: "24px 24px",
-            }} />
-
-            {loading && (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 size={24} className="animate-spin" style={{ color: "#3b82f6" }} />
-              </div>
-            )}
-
-            {!loading && loadError && (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center space-y-2">
-                  <AlertCircle size={24} style={{ color: "#ef4444", margin: "0 auto" }} />
-                  <p className="text-sm" style={{ color: "#fca5a5" }}>{loadError}</p>
-                  <p className="text-xs" style={{ color: "#52525b" }}>
-                    Ensure a project is selected and the API is running.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {!loading && !loadError && domains.length === 0 && (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center space-y-3 max-w-sm">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto"
-                    style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
-                    <Sparkles size={18} style={{ color: "#3b82f6" }} />
-                  </div>
-                  <p className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Architecture is empty</p>
-                  <p className="text-xs" style={{ color: "#71717a" }}>
-                    Use the prompt bar below to describe your institution's ERP structure.
-                  </p>
-                  <p className="text-xs" style={{ color: "#52525b" }}>
-                    e.g., "Add Admissions and Finance domains to a university ERP"
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {!loading && !loadError && domains.length > 0 && (
-              <div className={`grid ${gridCols} gap-4 relative z-10`}>
-                {domains.map((domain) => (
-                  <DomainCard key={domain.domain_id} domain={domain}
-                    onLink={(id) => setLinkDomainId(id)} />
+            {/* Example prompts */}
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: "#1e1e24" }}>
+              <p className="text-xs mb-2" style={{ color: "#52525b" }}>Example prompts:</p>
+              <div className="space-y-1">
+                {EXAMPLE_PROMPTS.map((ex) => (
+                  <button
+                    key={ex}
+                    onClick={() => setPrompt(ex)}
+                    className="block text-left text-xs w-full px-2 py-1 rounded transition-colors hover:bg-[#1e1e24]"
+                    style={{ color: "#71717a" }}
+                  >
+                    → {ex}
+                  </button>
                 ))}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Prompt result banner */}
-          {promptResult && (
-            <div className="flex-none px-4 py-2 flex items-center gap-3"
-              style={{ background: "#141418", borderTop: "1px solid #25252b" }}>
-              {promptResult.is_mock && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-                  style={{ background: "#1a120a", color: "#fbbf24", border: "1px solid #3a2a0a" }}>
-                  Demo
+          {/* Active Version Preview */}
+          {activeVersion && (
+            <div className="rounded-lg border p-5" style={cardStyle}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>
+                  Architecture v{activeVersion.version}
+                </h3>
+                <span
+                  className="text-xs px-2 py-0.5 rounded border"
+                  style={
+                    activeVersion.status === "compiled"
+                      ? { borderColor: "#16a34a40", background: "#0a1a0a", color: "#16a34a" }
+                      : { borderColor: "#25252b", color: "#8a8a94" }
+                  }
+                >
+                  {activeVersion.status}
                 </span>
-              )}
-              <span className="text-xs flex-1" style={{ color: "#a1a1aa" }}>
-                {promptResult.intent === "redirect_to_workflow"
-                  ? "→ Workflow creation is on the Workflows page"
-                  : promptResult.message || `Applied (${promptResult.intent})`}
-              </span>
-              <button onClick={() => setPromptResult(null)} style={{ color: "#52525b" }}><X size={12} /></button>
+              </div>
+              <p className="text-sm mb-4" style={{ color: "#8a8a94" }}>
+                {activeVersion.prompt}
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { icon: GitBranch, label: "Workflows", value: "1+" },
+                  { icon: Layers, label: "States", value: "4–8" },
+                  { icon: Building2, label: "Roles", value: "3+" },
+                ].map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="rounded p-3 border text-center" style={{ borderColor: "#1e1e24" }}>
+                    <Icon size={14} className="mx-auto mb-1" style={{ color: "#3b82f6" }} />
+                    <p className="text-lg font-bold" style={{ color: "#f4f4f5" }}>{value}</p>
+                    <p className="text-xs" style={{ color: "#71717a" }}>{label}</p>
+                  </div>
+                ))}
+              </div>
+              <a
+                href="/console/ai"
+                className="flex items-center justify-between w-full mt-4 rounded px-4 py-2 text-sm border transition-colors hover:bg-[#1e1e24]"
+                style={{ borderColor: "#25252b", color: "#a1a1aa" }}
+              >
+                <span>View full blueprint in AI Generator</span>
+                <ChevronRight size={14} />
+              </a>
             </div>
           )}
-
-          {promptError && (
-            <div className="flex-none px-4 py-2 flex items-center gap-2"
-              style={{ background: "#1a0a0a", borderTop: "1px solid #3a1a1a" }}>
-              <AlertCircle size={13} style={{ color: "#ef4444" }} />
-              <span className="text-xs" style={{ color: "#fca5a5" }}>{promptError}</span>
-              <button onClick={() => setPromptError(null)} className="ml-auto" style={{ color: "#52525b" }}><X size={12} /></button>
-            </div>
-          )}
-
-          {/* NLP Prompt bar */}
-          <div className="flex-none p-4" style={{ borderTop: "1px solid #25252b" }}>
-            <div className="flex items-center gap-2 rounded-full px-4 py-2.5"
-              style={{ background: "#1b1b24", border: "1px solid #3f3f46" }}>
-              <Sparkles size={15} style={{ color: "#3b82f6" }} className="shrink-0" />
-              <input type="text"
-                placeholder="e.g., Add a Financial Aid domain linked to Admissions…"
-                className="flex-1 bg-transparent border-none outline-none text-sm"
-                style={{ color: "#f4f4f5" }}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handlePrompt()}
-                disabled={applying || !architecture} />
-              <button onClick={handlePrompt} disabled={!prompt.trim() || applying || !architecture}
-                className="rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 transition-colors shrink-0"
-                style={{ background: "#3b82f6", color: "#fff" }}>
-                {applying ? <Loader2 size={12} className="animate-spin" /> : "Apply"}
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Right: version history */}
-        <div className="w-72 flex-none rounded-xl flex flex-col"
-          style={{ background: "#141418", border: "1px solid #25252b" }}>
-          <div className="flex-none px-4 py-3 flex items-center gap-2"
-            style={{ borderBottom: "1px solid #25252b" }}>
-            <History size={14} style={{ color: "#71717a" }} />
-            <span className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Version History</span>
+        {/* Version History sidebar */}
+        <div className="rounded-lg border p-4" style={{ ...cardStyle, height: "fit-content" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={14} style={{ color: "#71717a" }} />
+            <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Version History</h3>
           </div>
-          <VersionHistory versions={versions} />
+
+          {versions.length === 0 ? (
+            <div className="text-center py-8" style={{ color: "#52525b" }}>
+              <p className="text-xs">No versions yet</p>
+              <p className="text-xs mt-1">Generate your first architecture above</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {versions.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setActiveVersion(v)}
+                  className="w-full text-left rounded p-3 border transition-colors"
+                  style={
+                    activeVersion?.id === v.id
+                      ? { background: "#1e1e24", borderColor: "#3b82f630" }
+                      : { background: "transparent", borderColor: "#1e1e24" }
+                  }
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium" style={{ color: "#f4f4f5" }}>v{v.version}</span>
+                    <span
+                      className="text-[10px] px-1.5 rounded"
+                      style={{
+                        background: v.status === "compiled" ? "#0a1a0a" : "#1a1a0a",
+                        color: v.status === "compiled" ? "#16a34a" : "#ca8a04",
+                      }}
+                    >
+                      {v.status}
+                    </span>
+                  </div>
+                  <p className="text-xs truncate" style={{ color: "#71717a" }}>
+                    {v.prompt.slice(0, 60)}…
+                  </p>
+                  <p className="text-[10px] mt-1" style={{ color: "#52525b" }}>
+                    {new Date(v.created_at).toLocaleTimeString()}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Link modal */}
-      {linkDomainId && architecture && (
-        <LinkModal
-          domainId={linkDomainId}
-          archId={architecture.id}
-          tenant={tenant}
-          onClose={() => setLinkDomainId(null)}
-          onLinked={handleLinked}
-        />
-      )}
     </div>
   );
 }

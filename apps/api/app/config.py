@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     secret_key: str = "CHANGE_ME_USE_ENV"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 10080  # 7 days for persistent login
     refresh_token_expire_days: int = 30
     bcrypt_rounds: int = 12
 

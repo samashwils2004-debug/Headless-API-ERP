@@ -458,11 +458,11 @@ export default function WorkflowsPage() {
                           <span style={{ color: "#71717a" }}>Provider</span>
                           <span style={{ color: "#a1a1aa" }}>{(blueprint as Record<string, unknown>).provider_used as string ?? "ai"}</span>
                         </div>
-                        {(blueprint as Record<string, unknown>).is_mock && (
+                        {(blueprint as Record<string, unknown>).is_mock ? (
                           <div className="text-[11px] px-2 py-1 rounded" style={{ background: "#1a120a", color: "#fbbf24", border: "1px solid #3a2a0a" }}>
                             Demo mode — connect an AI provider for live generation
                           </div>
-                        )}
+                        ) : null}
                       </div>
                       <div className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
                         <div className="text-xs font-medium mb-2" style={{ color: "#71717a" }}>States</div>
