@@ -222,21 +222,79 @@ These system invariants are enforced (see `apps/api/app/main.py`):
 
 Next.js app with route groups:
 - `(landing)` - Marketing pages (/, /architecture, /pricing)
-- `console` - Authenticated admin console
+- `(auth)` - Authentication pages (/login)
+- `console` - Authenticated admin console (requires login)
+  - `/console` - Dashboard with metrics, trends, and quick actions
   - `/console/workflows` - Workflow management
-  - `/console/architect` - AI blueprint generator
+  - `/console/ai` - AI Generator for blueprint compilation
+  - `/console/architect` - Institutional Architect with domain composition
   - `/console/projects` - Project management
   - `/console/api-keys` - API key management
   - `/console/templates` - Workflow templates
   - `/console/events` - Event stream viewer
+  - `/console/settings` - Settings with General, Security, and Runtime tabs
 - `docs` - Documentation site
 
 Component organization:
 - `components/ui` - shadcn/ui components (Radix + Tailwind)
+- `components/console` - Console-specific components (ConsoleShell, ConsoleProvider)
 - `components/landing` - Landing page sections
 - `components/docs` - Documentation components
 - `components/interactive` - Interactive demos
 - `components/shared` - Shared utilities (Terminal, JsonViewer, etc.)
+
+### Console Pages Architecture
+
+**Dashboard** (`/console/page.tsx`):
+- Enhanced metric cards with trend indicators (TrendBadge component)
+- StatCard component showing workflows, deployments, events, health score
+- Quick Actions panel with 3 action cards (Deploy Template, Generate with AI, Create API Key)
+- Recent Activity feed with live event stream
+- Event Type Distribution chart
+- Uses `useEventStream` hook for real-time WebSocket updates
+
+**Architect** (`/console/architect/page.tsx`):
+- Institution Context Builder:
+  - Institution Type: university/college/edtech/corporate
+  - Institution Size: small/medium/large/enterprise
+  - Compliance Tags: FERPA, GDPR, HIPAA, SOC2, ISO27001
+- Example prompts for quick start
+- Real API integration with `/api/ai/blueprints/compile`
+- Version management and status tracking (draft/compiled/deployed)
+- Toast notifications with Sonner library
+- Uses localStorage for auth tokens
+
+**Settings** (`/console/settings/page.tsx`):
+- Tabbed interface with 3 sections:
+  1. General: Institution ID, Active Project, Environment selector
+  2. Security: JWT expiry, CSRF, password hashing, multi-tenant isolation
+  3. Runtime: Workflow execution defaults, event stream config
+- Sidebar navigation with icons
+- Form controls with save functionality
+- Toast notifications for success feedback
+
+### Authentication & Session Management
+
+**Middleware** (`apps/web/middleware.ts`):
+- Checks for `access_token` cookie on all `/console` routes
+- Redirects unauthenticated users to `/login?next=/console/...`
+- Redirects authenticated users away from `/login` to `/console`
+- Sets security headers (CSP, X-Frame-Options, etc.)
+
+**Login Flow** (`apps/web/src/app/api/auth/login/route.ts`):
+- Proxies to backend `/api/auth/login`
+- Sets cookies on successful login:
+  - `access_token` (httpOnly, 7 days expiration)
+  - `refresh_token` (httpOnly, 30 days)
+  - `csrf_token` (30 days)
+  - `institution_id` (30 days)
+- All cookies use `sameSite: "lax"` and `secure` in production
+
+**Session Persistence**:
+- Backend JWT tokens expire in 7 days (`access_token_expire_minutes: 10080`)
+- Cookies persist for 30 days to enable long-term sessions
+- No automatic token refresh implemented (tokens last 7 days)
+- Users stay logged in across browser sessions
 
 ## Configuration
 
@@ -255,7 +313,15 @@ GROQ_API_KEY=...
 SENTRY_DSN=...
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:8000  # Backend API base URL
 ```
+
+**Important Config Notes**:
+- `access_token_expire_minutes` is set to `10080` (7 days) in `apps/api/app/config.py` for persistent login
+- Frontend cookies are set to 30 days maxAge for long-term session persistence
+- In development, cookies use `secure: false`; in production, `secure: true`
 
 ## Testing Strategy
 
