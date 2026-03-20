@@ -1,18 +1,17 @@
-import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 
 export function backendBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 }
 
-export function authHeaderFromCookies() {
-  const token = cookies().get("access_token")?.value;
+export function authHeaderFromRequest(req: NextRequest) {
+  const token = req.cookies.get("access_token")?.value;
   return token ? ({ Authorization: `Bearer ${token}` } as Record<string, string>) : {};
 }
 
 export function tenantHeadersFromRequest(req: NextRequest) {
-  const institutionId = req.headers.get("x-institution-id") || cookies().get("institution_id")?.value || "";
-  const projectId = req.headers.get("x-project-id") || cookies().get("project_id")?.value || "";
+  const institutionId = req.headers.get("x-institution-id") || req.cookies.get("institution_id")?.value || "";
+  const projectId = req.headers.get("x-project-id") || req.cookies.get("project_id")?.value || "";
   const headers: Record<string, string> = {};
   if (institutionId) {
     headers["X-Institution-Id"] = institutionId;
@@ -45,7 +44,7 @@ function hasSameOrigin(req: NextRequest) {
 }
 
 function hasValidCsrf(req: NextRequest) {
-  const csrfCookie = cookies().get("csrf_token")?.value || "";
+  const csrfCookie = req.cookies.get("csrf_token")?.value || "";
   const csrfHeader = req.headers.get("x-csrf-token") || "";
   return csrfCookie.length > 0 && csrfHeader.length > 0 && csrfCookie === csrfHeader;
 }
@@ -68,7 +67,7 @@ export async function proxyJson(
 
   const base = backendBaseUrl();
   const headers: Record<string, string> = {
-    ...authHeaderFromCookies(),
+    ...authHeaderFromRequest(req),
     ...tenantHeadersFromRequest(req),
     ...(extraHeaders || {}),
   };

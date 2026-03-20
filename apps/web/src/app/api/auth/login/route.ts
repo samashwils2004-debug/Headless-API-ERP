@@ -1,5 +1,4 @@
 import { randomUUID } from "crypto";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 import { backendBaseUrl } from "../../_utils";
@@ -20,7 +19,9 @@ export async function POST(request: NextRequest) {
   }
 
   const secure = process.env.NODE_ENV === "production";
-  cookies().set("access_token", data.access_token, {
+  const response = NextResponse.json({ ok: true, expires_in: data.expires_in }, { status: 200 });
+
+  response.cookies.set("access_token", data.access_token, {
     httpOnly: true,
     secure,
     sameSite: "lax",
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     maxAge: data.expires_in,
   });
   if (data.refresh_token) {
-    cookies().set("refresh_token", data.refresh_token, {
+    response.cookies.set("refresh_token", data.refresh_token, {
       httpOnly: true,
       secure,
       sameSite: "lax",
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30,
     });
   }
-  cookies().set("csrf_token", randomUUID(), {
+  response.cookies.set("csrf_token", randomUUID(), {
     httpOnly: false,
     secure,
     sameSite: "lax",
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (data.user?.institution_id) {
-    cookies().set("institution_id", data.user.institution_id, {
+    response.cookies.set("institution_id", data.user.institution_id, {
       httpOnly: false,
       secure,
       sameSite: "lax",
@@ -54,5 +55,5 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, expires_in: data.expires_in }, { status: 200 });
+  return response;
 }
