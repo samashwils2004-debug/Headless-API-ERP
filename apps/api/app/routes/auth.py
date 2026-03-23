@@ -39,6 +39,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
+        user=UserResponse.model_validate(user),
     )
 
 
@@ -73,6 +74,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
+        user=UserResponse.model_validate(user),
     )
 
 

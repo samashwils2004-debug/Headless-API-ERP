@@ -14,16 +14,39 @@ export default function EventStreamPage() {
 
   const [eventType, setEventType] = useState("all");
   const [timeRange, setTimeRange] = useState("24h");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEventStream(context.institutionId, context.projectId);
 
   useEffect(() => {
     if (!context.institutionId || !context.projectId) {
+      setLoadError(null);
       return;
     }
-    listEvents({ institutionId: context.institutionId, projectId: context.projectId }, 250).then((payload) =>
-      setEvents(payload.events)
-    );
+
+    let cancelled = false;
+
+    const load = async () => {
+      setLoadError(null);
+      try {
+        const payload = await listEvents({ institutionId: context.institutionId, projectId: context.projectId }, 250);
+        if (cancelled) {
+          return;
+        }
+        setEvents(payload.events);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setLoadError(error instanceof Error ? error.message : "Failed to load events.");
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [context.institutionId, context.projectId, setEvents]);
 
   const filtered = useMemo(() => {
@@ -47,6 +70,12 @@ export default function EventStreamPage() {
           Real-time scoped stream: institution + project filtered with WebSocket updates.
         </p>
       </div>
+
+      {loadError ? (
+        <div className="rounded-md border border-[rgba(239,68,68,0.24)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-sm text-[#fca5a5]">
+          {loadError}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-3">
         <select

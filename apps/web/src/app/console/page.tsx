@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Activity, ArrowUpRight, Cpu, Key, LayoutTemplate, Zap } from "lucide-react";
 
@@ -87,20 +87,43 @@ export default function ConsoleDashboardPage() {
   const setWorkflows = useWorkflowStore((state) => state.setWorkflows);
   const events = useEventStore((state) => state.events);
   const setEvents = useEventStore((state) => state.setEvents);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEventStream(context.institutionId, context.projectId);
 
   useEffect(() => {
-    if (!context.institutionId || !context.projectId) return;
+    if (!context.institutionId || !context.projectId) {
+      setLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+
     const run = async () => {
-      const [workflowPayload, eventPayload] = await Promise.all([
-        listWorkflows({ institutionId: context.institutionId, projectId: context.projectId }),
-        listEvents({ institutionId: context.institutionId, projectId: context.projectId }, 200),
-      ]);
-      setWorkflows(workflowPayload.workflows);
-      setEvents(eventPayload.events);
+      setLoadError(null);
+      try {
+        const [workflowPayload, eventPayload] = await Promise.all([
+          listWorkflows({ institutionId: context.institutionId, projectId: context.projectId }),
+          listEvents({ institutionId: context.institutionId, projectId: context.projectId }, 200),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setWorkflows(workflowPayload.workflows);
+        setEvents(eventPayload.events);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setLoadError(error instanceof Error ? error.message : "Failed to load dashboard data.");
+      }
     };
-    run();
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
   }, [context.institutionId, context.projectId, setEvents, setWorkflows]);
 
   const activeWorkflows = workflows.filter((w) => w.deployed).length;
@@ -123,6 +146,15 @@ export default function ConsoleDashboardPage() {
             : `Runtime metrics for ${context.projectId}`}
         </p>
       </div>
+
+      {loadError && !noProject ? (
+        <div
+          className="rounded-lg border px-4 py-3 text-sm"
+          style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.24)", color: "#fca5a5" }}
+        >
+          {loadError}
+        </div>
+      ) : null}
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -165,11 +197,11 @@ export default function ConsoleDashboardPage() {
               href={href}
               className="group flex items-start gap-3 rounded-lg border p-4 transition-colors"
               style={{ background: "#141418", borderColor: "#1c1c22" }}
-              onMouseEnter={(e) => {
+              onMouseEnter={(e: MouseEvent<HTMLAnchorElement>) => {
                 (e.currentTarget as HTMLElement).style.borderColor = "#25252b";
                 (e.currentTarget as HTMLElement).style.background = "#1b1b24";
               }}
-              onMouseLeave={(e) => {
+              onMouseLeave={(e: MouseEvent<HTMLAnchorElement>) => {
                 (e.currentTarget as HTMLElement).style.borderColor = "#1c1c22";
                 (e.currentTarget as HTMLElement).style.background = "#141418";
               }}

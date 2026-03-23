@@ -4,7 +4,6 @@ Database configuration with security enhancements.
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import Pool, QueuePool
-
 from app.config import get_settings
 
 settings = get_settings()

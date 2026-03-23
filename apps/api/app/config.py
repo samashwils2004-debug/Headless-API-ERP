@@ -1,7 +1,7 @@
 """Orquestra settings — Institutional Runtime."""
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -50,6 +50,17 @@ class Settings(BaseSettings):
 
     sentry_dsn: str = ""
 
+    @field_validator("debug", mode="before")
+    @classmethod
+    def normalize_debug(cls, value: Any):
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "prod", "production"}:
+                return False
+            if normalized in {"debug", "dev", "development"}:
+                return True
+        return value
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, value: str, info):
@@ -64,7 +75,7 @@ class Settings(BaseSettings):
             raise ValueError("Production requires PostgreSQL")
         return value
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 
 @lru_cache

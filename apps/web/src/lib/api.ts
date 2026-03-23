@@ -15,17 +15,37 @@ function withTenant(headers?: TenantHeaders): Record<string, string> {
   };
 }
 
+function getErrorMessage(payload: unknown, res: Response) {
+  if (typeof payload === "string" && payload.trim()) {
+    return payload;
+  }
+
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    for (const candidate of [record.detail, record.message, record.error]) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+      if (candidate && typeof candidate === "object") {
+        return JSON.stringify(candidate);
+      }
+    }
+  }
+
+  const statusLabel = res.statusText ? `${res.status} ${res.statusText}` : String(res.status);
+  return `Request failed (${statusLabel})`;
+}
+
 async function parseResponse(res: Response) {
   const text = await res.text();
   let data: unknown = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    data = { detail: text };
+    data = text;
   }
   if (!res.ok) {
-    const detail = (data as { detail?: string })?.detail || "Request failed";
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new Error(getErrorMessage(data, res));
   }
   return data;
 }

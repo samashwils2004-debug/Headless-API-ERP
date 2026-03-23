@@ -3,23 +3,43 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { backendBaseUrl } from "../../_utils";
 
+async function readResponseBody(res: Response) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { detail: text || "Unknown response" };
+  }
+}
+
 export async function POST(request: NextRequest) {
   const base = backendBaseUrl();
   const payload = await request.json();
-  const res = await fetch(`${base}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: `Auth API unavailable at ${base}. Start the backend server and try again.` },
+      { status: 503 }
+    );
+  }
 
-  const data = await res.json();
+  const data = await readResponseBody(res);
   if (!res.ok) {
     return NextResponse.json(data, { status: res.status });
   }
 
   const secure = process.env.NODE_ENV === "production";
-  const response = NextResponse.json({ ok: true, expires_in: data.expires_in }, { status: 200 });
+  const response = NextResponse.json(
+    { ok: true, expires_in: data.expires_in, user: data.user ?? null },
+    { status: 200 }
+  );
 
   response.cookies.set("access_token", data.access_token, {
     httpOnly: true,

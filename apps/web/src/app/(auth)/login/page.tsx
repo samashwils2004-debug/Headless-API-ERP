@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff, Loader2, Shield } from "lucide-react";
@@ -40,6 +40,21 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (searchParams.has("email") || searchParams.has("password")) {
+      router.replace("/login");
+    }
+  }, [router, searchParams]);
+
+  const readResponseBody = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      return { detail: text || "Unexpected server response." };
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -62,13 +77,15 @@ function LoginForm() {
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
 
-      const data = await res.json();
+      const data = await readResponseBody(res);
 
       if (!res.ok) {
         // Use a generic message to avoid leaking whether the email exists
         const msg =
           res.status === 401
             ? "Invalid email or password."
+            : res.status === 503
+              ? data?.detail || "The auth server is not running."
             : data?.detail || "Something went wrong. Please try again.";
         setError(msg);
         return;
@@ -78,7 +95,7 @@ function LoginForm() {
       router.replace(next);
       router.refresh();
     } catch {
-      setError("Unable to reach the server. Please check your connection.");
+      setError("Unable to reach the app server. Make sure the web app is running and try again.");
     } finally {
       setLoading(false);
     }
@@ -134,7 +151,7 @@ function LoginForm() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} noValidate className="px-8 py-7 space-y-5">
+        <form method="post" onSubmit={handleSubmit} noValidate className="px-8 py-7 space-y-5">
           {/* Error banner */}
           {error && (
             <div
@@ -161,8 +178,11 @@ function LoginForm() {
             </label>
             <input
               id="email"
+              name="email"
               type="email"
-              autoComplete="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -199,6 +219,7 @@ function LoginForm() {
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 required

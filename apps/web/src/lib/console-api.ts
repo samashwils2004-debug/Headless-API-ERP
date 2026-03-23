@@ -57,12 +57,40 @@ function headersForTenant(tenant: TenantContext, extra: Record<string, string> =
   };
 }
 
+function getErrorMessage(payload: unknown, response: Response) {
+  if (typeof payload === "string" && payload.trim()) {
+    return payload;
+  }
+
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    for (const candidate of [record.detail, record.message, record.error]) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+      if (candidate && typeof candidate === "object") {
+        return JSON.stringify(candidate);
+      }
+    }
+  }
+
+  const statusLabel = response.statusText ? `${response.status} ${response.statusText}` : String(response.status);
+  return `Request failed (${statusLabel})`;
+}
+
 async function parse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : {};
+  let payload: unknown = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = text;
+    }
+  }
+
   if (!response.ok) {
-    const detail = payload?.detail || "Request failed";
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new Error(getErrorMessage(payload, response));
   }
   return payload as T;
 }

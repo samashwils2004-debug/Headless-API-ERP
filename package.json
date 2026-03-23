@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "api:dev": "python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir apps/api",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
     "web:type-check": "npm --prefix apps/web run type-check",
