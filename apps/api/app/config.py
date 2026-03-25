@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     db_statement_timeout_ms: int = 30000
 
     redis_url: str = ""
+    storage_backend: Literal["local", "supabase"] = "local"
+    storage_bucket: str = "application-documents"
+    upload_dir: str = str((BASE_DIR / "uploads").as_posix())
 
     secret_key: str = "CHANGE_ME_USE_ENV"
     algorithm: str = "HS256"
@@ -45,6 +48,11 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     openai_api_key: str = ""  # kept for backward compat
     openai_model: str = "gpt-4-turbo"
+    supabase_url: str = ""
+    supabase_publishable_key: str = ""
+    supabase_service_role_key: str = ""
+    supabase_jwt_secret: str = ""
+    supabase_token_expire_minutes: int = 10
 
     ai_cache_ttl: int = 86400  # 24h Redis cache for AI responses
 
@@ -75,7 +83,11 @@ class Settings(BaseSettings):
             raise ValueError("Production requires PostgreSQL")
         return value
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(BASE_DIR / ".env.local", BASE_DIR / ".env"),
+        case_sensitive=False,
+        extra="ignore",
+    )
 
 
 @lru_cache

@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -68,7 +69,7 @@ class Workflow(Base):
     __tablename__ = "workflows"
     __table_args__ = (
         UniqueConstraint("institution_id", "project_id", "name", "version", name="uq_workflow_name_version"),
-        Index("ix_workflows_definition_gin_like", "definition"),
+        Index("ix_workflows_definition_gin_like", "definition", postgresql_using="gin"),
     )
 
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -76,7 +77,7 @@ class Workflow(Base):
     project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     version = Column(Integer, nullable=False)
-    definition = Column(JSON, nullable=False)
+    definition = Column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
     is_ai_generated = Column(Boolean, default=False, nullable=False)
     deployed = Column(Boolean, default=False, nullable=False)
     created_by = Column(String, ForeignKey("users.id"), nullable=False)

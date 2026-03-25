@@ -25,6 +25,14 @@ out/
 .env
 .env.*
 !.env.example
+.envrc
+.secrets/
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # Runtime data
 *.db

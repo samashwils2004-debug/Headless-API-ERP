@@ -1,13 +1,11 @@
 'use client';
 import React from 'react';
-import { useEffect, useState, startTransition } from 'react';
+import { useState, startTransition } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { ApiTab } from '@/types';
 import { CodeBlock } from '@/components/docs/CodeBlock';
 import { ConsoleOutput } from '@/components/interactive/ConsoleOutput';
 import { LogEntry } from '@/types';
-import { createSupabaseClientWithBearer } from '../../lib/supabase';
-import { fetchSupabaseBrokerToken, getBackendAccessToken } from '../../lib/supabaseSession';
 
 const apiTabs: ApiTab[] = [
   {
@@ -89,42 +87,6 @@ export function DemoPage() {
   const [logs] = useState<LogEntry[]>([
     { message: 'API Demo Ready', type: 'system', timestamp: Date.now() },
   ]);
-  const [recentApplications, setRecentApplications] = useState<Array<Record<string, unknown>>>([]);
-  const [supabaseMessage, setSupabaseMessage] = useState<string>('Supabase direct-read not initialized.');
-
-  useEffect(() => {
-    const enableRealtime = (process.env.NEXT_PUBLIC_ENABLE_REALTIME as string | undefined) === 'true';
-    void enableRealtime; // Reserved for optional realtime phase.
-
-    const loadRecentApplications = async () => {
-      const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL as string | undefined) ?? '';
-      const backendToken = getBackendAccessToken();
-      if (!apiBaseUrl || !backendToken) {
-        setSupabaseMessage('Missing VITE_API_BASE_URL or backend access_token in localStorage.');
-        return;
-      }
-
-      try {
-        const broker = await fetchSupabaseBrokerToken(apiBaseUrl, backendToken);
-        const supabase = createSupabaseClientWithBearer(broker.access_token);
-        const { data, error } = await supabase
-          .from('recent_applications')
-          .select('*')
-          .limit(10);
-        if (error) {
-          setSupabaseMessage(`Supabase read failed: ${error.message}`);
-          return;
-        }
-        setRecentApplications(data ?? []);
-        setSupabaseMessage('Supabase direct-read loaded from recent_applications.');
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Unknown error';
-        setSupabaseMessage(`Supabase unavailable: ${msg}`);
-      }
-    };
-
-    void loadRecentApplications();
-  }, []);
 
   const handleSendRequest = (tabId: string, response: string) => {
     setLoading((prev) => ({ ...prev, [tabId]: true }));
@@ -153,14 +115,6 @@ export function DemoPage() {
 
       {/* Content Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-brand-surface border border-brand-border rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-semibold text-white mb-2">Supabase Direct Read (RLS)</h2>
-          <p className="text-sm text-gray-400 mb-3">{supabaseMessage}</p>
-          <p className="text-sm text-gray-300">
-            Rows loaded: <span className="font-mono">{recentApplications.length}</span>
-          </p>
-        </div>
-
         <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
           <Tabs.List className="flex gap-2 border-b border-gray-700 mb-8">
             {apiTabs.map((tab) => (

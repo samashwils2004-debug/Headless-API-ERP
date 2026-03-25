@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { proxyJson } from "../../_utils";
+import { NextResponse } from "next/server";
 
-export async function POST(request: NextRequest) {
-  const proxied = await proxyJson("/api/auth/supabase-token", request, "POST");
-  return NextResponse.json(proxied.body, { status: proxied.status });
+export async function POST() {
+  return NextResponse.json(
+    { detail: "Supabase broker tokens are disabled in this Aiven-based setup." },
+    { status: 410 }
+  );
 }

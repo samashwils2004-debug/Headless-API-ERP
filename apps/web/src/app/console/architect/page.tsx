@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Building2, Wand2, ChevronRight, GitBranch, Layers, Clock } from "lucide-react";
 import { toast } from "sonner";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { useProjectContextStore } from "@/lib/stores/project-context-store";
 
 interface ArchitectureVersion {
   id: string;
@@ -14,9 +13,16 @@ interface ArchitectureVersion {
   status: "draft" | "compiled" | "deployed";
 }
 
-function getAuthHeaders() {
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+function getCsrfToken() {
+  if (typeof document === "undefined") {
+    return "";
+  }
+  return (
+    document.cookie
+      .split("; ")
+      .find((entry) => entry.startsWith("csrf_token="))
+      ?.split("=")[1] || ""
+  );
 }
 
 const EXAMPLE_PROMPTS = [
@@ -28,6 +34,7 @@ const EXAMPLE_PROMPTS = [
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
 export default function ArchitectPage() {
+  const context = useProjectContextStore((state) => state.context);
   const [prompt, setPrompt] = useState("");
   const [institutionType, setInstitutionType] = useState("university");
   const [institutionSize, setInstitutionSize] = useState("medium");
@@ -44,13 +51,21 @@ export default function ArchitectPage() {
 
   async function generate() {
     if (!prompt.trim()) { toast.error("Enter a description first"); return; }
+    if (!context.institutionId || !context.projectId) {
+      toast.error("Select a project first");
+      return;
+    }
     setGenerating(true);
     try {
-      const authHeaders = getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/ai/blueprints/compile`, {
+      const csrfToken = getCsrfToken();
+      const res = await fetch("/api/ai/compile", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders } as HeadersInit,
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Institution-Id": context.institutionId,
+          "X-Project-Id": context.projectId,
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        } satisfies HeadersInit,
         body: JSON.stringify({
           prompt,
           institution_context: {
@@ -172,7 +187,7 @@ export default function ArchitectPage() {
               <p className="text-xs" style={{ color: "#52525b" }}>{prompt.length}/2000</p>
               <button
                 onClick={generate}
-                disabled={generating || !prompt.trim()}
+                disabled={generating || !prompt.trim() || !context.institutionId || !context.projectId}
                 className="flex items-center gap-2 rounded px-5 py-2 text-sm font-semibold transition-all disabled:opacity-50"
                 style={{ background: generating ? "#1e3a5f" : "#3b82f6", color: "#fff" }}
               >

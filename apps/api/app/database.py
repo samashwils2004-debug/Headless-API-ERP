@@ -2,6 +2,7 @@
 Database configuration with security enhancements.
 """
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import Pool, QueuePool
 from app.config import get_settings
@@ -66,5 +67,5 @@ def init_db():
     from app import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
     if settings.environment == "development":
-        print(f"Database initialized: {settings.database_url}")
-
+        safe_database_url = make_url(settings.database_url).render_as_string(hide_password=True)
+        print(f"Database initialized: {safe_database_url}")
