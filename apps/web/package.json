@@ -3,8 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "api:dev": "python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir ../api",
+    "api:dev": "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir ../api",
     "dev": "next dev --hostname 0.0.0.0",
+    "dev:stack": "npm --prefix ../.. run dev",
     "dev:5173": "next dev --hostname 0.0.0.0 -p 5173",
     "build": "next build",
     "start": "next start",

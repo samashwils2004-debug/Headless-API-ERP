@@ -279,9 +279,9 @@ export async function getOrCreateArchitecture(tenant: TenantContext): Promise<Ar
     cache: "no-store",
     headers: headersForTenant(tenant),
   });
-  const listData = await parse<{ architectures: ArchitectureItem[] }>(listRes);
-  if (listData.architectures.length > 0) {
-    return listData.architectures[0];
+  const listData = await parse<{ architecture: ArchitectureItem | null }>(listRes);
+  if (listData.architecture) {
+    return listData.architecture;
   }
   const createRes = await fetch("/api/architect", {
     method: "POST",
@@ -291,22 +291,59 @@ export async function getOrCreateArchitecture(tenant: TenantContext): Promise<Ar
   return parse<ArchitectureItem>(createRes);
 }
 
-export async function applyArchitectPrompt(tenant: TenantContext, archId: string, prompt: string) {
+export async function compileArchitecture(
+  tenant: TenantContext,
+  archId: string,
+  body: { workflow_ids: string[]; key_name: string }
+) {
+  const response = await fetch(`/api/architect/${archId}/compile`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify(body),
+  });
+  return parse<{
+    architecture_version_id: string;
+    version_number: number;
+    workflows_linked: number;
+    api_key: string;
+    api_key_prefix: string;
+    webhook_secret: string;
+    webhook_secret_prefix: string;
+    message: string;
+  }>(response);
+}
+
+export type ArchitectPromptResult =
+  | {
+      type: "success";
+      graph: Record<string, unknown>;
+      diff: { summary: string; operation: string | null };
+      version: number;
+      rationale: string;
+      visualization_config: Record<string, unknown>;
+      intent_classified_as: string;
+      _from_cache: boolean;
+      _is_mock: boolean;
+    }
+  | {
+      type: "redirect";
+      message: string;
+      suggested_action: string;
+      pre_fill_prompt: string;
+    }
+  | { type: "compile_prompt"; message: string };
+
+export async function applyArchitectPrompt(
+  tenant: TenantContext,
+  archId: string,
+  prompt: string
+): Promise<ArchitectPromptResult> {
   const response = await fetch(`/api/architect/${archId}/prompt`, {
     method: "POST",
     headers: headersForTenant(tenant),
     body: JSON.stringify({ prompt }),
   });
-  return parse<{
-    intent: string;
-    confidence: number;
-    message: string;
-    suggested_action: string;
-    pre_fill_prompt: string;
-    architecture: ArchitectureItem | null;
-    diff_summary: string;
-    is_mock: boolean;
-  }>(response);
+  return parse<ArchitectPromptResult>(response);
 }
 
 export async function linkWorkflowToDomain(
@@ -327,7 +364,9 @@ export async function getAvailableWorkflows(tenant: TenantContext, archId: strin
     cache: "no-store",
     headers: headersForTenant(tenant),
   });
-  return parse<{ workflows: Array<{ id: string; name: string; version: number }> }>(response);
+  return parse<{
+    workflows: Array<{ id: string; name: string; version: number; is_linked: boolean; is_ai_generated: boolean }>;
+  }>(response);
 }
 
 export async function getArchitectureVersions(tenant: TenantContext, archId: string) {
@@ -336,4 +375,34 @@ export async function getArchitectureVersions(tenant: TenantContext, archId: str
     headers: headersForTenant(tenant),
   });
   return parse<{ versions: ArchitectureVersionItem[] }>(response);
+}
+
+// ── API Key functions ────────────────────────────────────────────────────────
+
+export type ApiKeyItem = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  is_active: boolean;
+  created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+};
+
+export async function listApiKeys(tenant: TenantContext) {
+  const response = await fetch("/api/api-keys", {
+    cache: "no-store",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{ keys: ApiKeyItem[] }>(response);
+}
+
+export async function revokeApiKey(tenant: TenantContext, keyId: string) {
+  const response = await fetch(`/api/api-keys/${keyId}`, {
+    method: "DELETE",
+    headers: headersForTenant(tenant),
+  });
+  if (response.status === 204) return;
+  return parse<void>(response);
 }

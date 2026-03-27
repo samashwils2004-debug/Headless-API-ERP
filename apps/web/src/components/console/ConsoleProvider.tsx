@@ -31,9 +31,12 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         const user = await getCurrentUser();
         setUser(user);
 
+        // Always use the real user's institution_id — never trust stale localStorage context
+        // which could be from a previous session with a different account/institution.
+        const isSameInstitution = context.institutionId === user.institution_id;
         const bootstrapTenant: TenantContext = {
-          institutionId: context.institutionId || user.institution_id,
-          projectId: context.projectId || "bootstrap",
+          institutionId: user.institution_id,
+          projectId: isSameInstitution ? (context.projectId || "bootstrap") : "bootstrap",
         };
 
         const projectsPayload = await listProjects(bootstrapTenant);

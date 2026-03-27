@@ -12,7 +12,7 @@ from app.database import init_db
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.observability import metrics_response, record_http_metrics
 from app.routes import ai, applications, auth, events, projects, workflows
-from app.routes import api_keys, templates, architect
+from app.routes import api_keys, templates, architect, runtime
 from app.ws import hub
 
 settings = get_settings()
@@ -59,8 +59,12 @@ app.add_middleware(RateLimitMiddleware, redis_url=settings.redis_url)
 
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
-    # CSRF validation for mutations
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path.startswith("/api"):
+    # CSRF validation for mutations (skipped for external runtime API)
+    if (
+        request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        and request.url.path.startswith("/api")
+        and not request.url.path.startswith("/api/v1/")
+    ):
         csrf_cookie = request.cookies.get("csrf_token")
         csrf_header = request.headers.get("X-CSRF-Token")
         if csrf_cookie and csrf_header and csrf_cookie != csrf_header:
@@ -110,6 +114,7 @@ app.include_router(ai.router, prefix="/api", tags=["ai"])
 app.include_router(api_keys.router, prefix="/api", tags=["api-keys"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(architect.router, prefix="/api", tags=["architect"])
+app.include_router(runtime.router, prefix="/api", tags=["runtime"])
 
 
 @app.get("/health")

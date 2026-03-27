@@ -5,20 +5,22 @@ Handles CRUD for institution architectures plus AI-driven NLP prompts.
 from __future__ import annotations
 
 import copy
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.ai.architect.erp_schema import ERP_COMPOSITION_SCHEMA, ERP_SYSTEM_PROMPT
+from app.ai.architect.erp_schema import ERP_SYSTEM_PROMPT
 from app.ai.architect.nlp_intent_parser import NLPIntentParser
 from app.ai.architect.prompt_factory import ERPPromptFactory
 from app.ai.architect.visualization_generator import ERPVisualizationGenerator
 from app.ai.provider_router import get_provider_router
+from app.core.api_key_utils import generate_api_key, generate_webhook_secret
+from app.core.event_engine import EventEngine
 from app.core.rbac_engine import check_permission
 from app.database import get_db
-from app.models import InstitutionArchitecture, ArchitectureVersion, Workflow
+from app.models import APIKey, ArchWorkflow, ArchitectureVersion, InstitutionArchitecture, Workflow
 from app.schemas import (
     ArchitectureCreate,
     ArchitectureResponse,
@@ -36,6 +38,29 @@ router = APIRouter()
 _intent_parser = NLPIntentParser()
 _prompt_factory = ERPPromptFactory()
 _viz_generator = ERPVisualizationGenerator()
+
+_STOP_WORDS = {
+    "add", "create", "new", "a", "an", "the", "domain", "domains",
+    "for", "with", "and", "to", "from", "in", "of", "my", "our",
+    "please", "i", "want", "need", "section", "department",
+}
+
+
+class CompileRequest(BaseModel):
+    workflow_ids: list[str]
+    key_name: str = "Default API Key"
+
+
+class CompileResponse(BaseModel):
+    architecture_version_id: str
+    version_number: int
+    workflows_linked: int
+    api_key: str
+    api_key_prefix: str
+    webhook_secret: str
+    webhook_secret_prefix: str
+    message: str
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +83,18 @@ def _linked_workflows(arch: InstitutionArchitecture) -> list[dict]:
     ]
 
 
+def _extract_domain_ids_from_prompt(prompt: str) -> list[str]:
+    """Extract likely domain names from a natural language prompt using stop-word filtering."""
+    words = prompt.lower().strip().split()
+    candidates = [
+        w.replace(",", "").replace(".", "")
+        for w in words
+        if w.lower().replace(",", "").replace(".", "") not in _STOP_WORDS
+        and len(w) > 2
+    ]
+    return candidates[:5] if candidates else ["general"]
+
+
 def _apply_operation(current_graph: dict, operation: dict) -> dict:
     """Apply a single compose_erp_architecture operation to the graph."""
     graph = copy.deepcopy(current_graph)
@@ -71,7 +108,6 @@ def _apply_operation(current_graph: dict, operation: dict) -> dict:
         domain_data = operation.get("domain", {})
         if not domain_data.get("id"):
             return graph
-        # Avoid duplicates
         existing_ids = {d["id"] for d in erp.get("domains", [])}
         if domain_data["id"] not in existing_ids:
             erp.setdefault("domains", []).append({
@@ -155,6 +191,7 @@ def create_architecture(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
 ):
     """Create a new (empty) architecture for the current project."""
     existing = db.query(InstitutionArchitecture).filter(
@@ -184,6 +221,7 @@ def get_or_list_architectures(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:read")),
 ):
     """Get the architecture for the current project (at most one per project)."""
     arch = db.query(InstitutionArchitecture).filter(
@@ -201,6 +239,7 @@ def get_architecture(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:read")),
 ):
     arch = _get_arch_or_404(arch_id, tenant, db)
     return ArchitectureResponse.model_validate(arch)
@@ -213,6 +252,7 @@ def apply_prompt(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
 ):
     """Apply an NLP prompt to the architecture (Mode B main entry point)."""
     arch = _get_arch_or_404(arch_id, tenant, db)
@@ -246,28 +286,39 @@ def apply_prompt(
     # ── AI-requiring paths ───────────────────────────────────────────────────
     router_instance = get_provider_router()
     user_prompt = _prompt_factory.build(body.prompt, arch.graph_json)
-    response = router_instance.generate(user_prompt, {"mode": "erp_architect"})
+    response = router_instance.generate(
+        user_prompt,
+        {"mode": "erp_architect"},
+        system_prompt=ERP_SYSTEM_PROMPT,
+    )
 
     raw_result = response["result"]
     from_cache = response["cached"]
     is_mock = response["is_mock"]
 
-    # Extract compose operation from result
-    # Provider returns blueprint-shaped dict; for architect mode we interpret
-    # the top-level as an operation description.
     if is_mock or not isinstance(raw_result, dict):
-        # Fallback: treat prompt as "add_domain" when AI returns nothing useful
-        domain_name = body.prompt.strip().split()[-1].lower().replace(" ", "_")
-        operation = {
-            "operation": "add_domain",
-            "domain": {
-                "id": domain_name,
-                "label": body.prompt.strip().split()[-1].title(),
-            },
-            "rationale": f"Added domain based on: {body.prompt[:100]}",
-        }
+        # Fallback: extract meaningful domain names using stop-word filtering
+        domain_ids = _extract_domain_ids_from_prompt(body.prompt)
+        operations = [
+            {
+                "operation": "add_domain",
+                "domain": {
+                    "id": domain_id,
+                    "label": domain_id.replace("_", " ").title(),
+                },
+                "rationale": f"Added domain '{domain_id}' based on: {body.prompt[:100]}",
+            }
+            for domain_id in domain_ids
+        ]
+
+        old_graph = copy.deepcopy(arch.graph_json)
+        new_graph = arch.graph_json
+        for op in operations:
+            new_graph = _apply_operation(new_graph, op)
+
+        diff_summary = _compute_diff_summary(old_graph, new_graph)
+        operation = operations[0] if operations else {}
     else:
-        # Try to extract operation from result
         operation = raw_result if "operation" in raw_result else {
             "operation": "add_domain",
             "domain": {
@@ -276,10 +327,9 @@ def apply_prompt(
             },
             "rationale": str(raw_result)[:200],
         }
-
-    old_graph = copy.deepcopy(arch.graph_json)
-    new_graph = _apply_operation(arch.graph_json, operation)
-    diff_summary = _compute_diff_summary(old_graph, new_graph)
+        old_graph = copy.deepcopy(arch.graph_json)
+        new_graph = _apply_operation(arch.graph_json, operation)
+        diff_summary = _compute_diff_summary(old_graph, new_graph)
 
     arch.graph_json = new_graph
     arch.version += 1
@@ -321,11 +371,11 @@ def link_workflow(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
 ):
     """Link a deployed workflow to a domain in the architecture."""
     arch = _get_arch_or_404(arch_id, tenant, db)
 
-    # Verify workflow belongs to this project
     wf = db.query(Workflow).filter(
         Workflow.id == body.workflow_id,
         Workflow.institution_id == tenant.institution_id,
@@ -334,7 +384,6 @@ def link_workflow(
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found in this project")
 
-    # Apply link operation
     old_graph = copy.deepcopy(arch.graph_json)
     new_graph = _apply_operation(arch.graph_json, {
         "operation": "link_workflow",
@@ -361,12 +410,119 @@ def link_workflow(
     }
 
 
+@router.post("/architect/{arch_id}/compile", response_model=CompileResponse, status_code=201)
+async def compile_architecture(
+    arch_id: str,
+    body: CompileRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
+):
+    """Compile architecture into an immutable version, generate API key and webhook secret."""
+    arch = _get_arch_or_404(arch_id, tenant, db)
+
+    if not body.workflow_ids:
+        raise HTTPException(status_code=400, detail="At least one workflow must be selected")
+
+    # Validate all workflows
+    workflows: list[Workflow] = []
+    for wf_id in body.workflow_ids:
+        wf = db.query(Workflow).filter(
+            Workflow.id == wf_id,
+            Workflow.institution_id == tenant.institution_id,
+            Workflow.project_id == tenant.project_id,
+        ).first()
+        if not wf:
+            raise HTTPException(status_code=404, detail=f"Workflow {wf_id} not found in this project")
+        if not wf.deployed:
+            raise HTTPException(status_code=400, detail=f"Workflow '{wf.name}' must be deployed before compiling")
+        workflows.append(wf)
+
+    # Determine next version number
+    latest_version = (
+        db.query(ArchitectureVersion)
+        .filter(ArchitectureVersion.architecture_id == arch.id)
+        .order_by(ArchitectureVersion.version.desc())
+        .first()
+    )
+    version_number = (latest_version.version + 1) if latest_version else 1
+
+    # Create immutable architecture version
+    arch_version = ArchitectureVersion(
+        architecture_id=arch.id,
+        version=version_number,
+        prompt=f"Compile: {body.key_name}",
+        graph_snapshot=arch.graph_json,
+        diff_summary=f"Compiled with {len(workflows)} workflow(s)",
+    )
+    db.add(arch_version)
+    db.flush()  # Get arch_version.id
+
+    # Create ArchWorkflow junction records
+    for idx, wf in enumerate(workflows):
+        arch_wf = ArchWorkflow(
+            architecture_version_id=arch_version.id,
+            workflow_id=wf.id,
+            workflow_version=wf.version,
+            display_order=idx,
+        )
+        db.add(arch_wf)
+
+    # Generate API key and webhook secret
+    key_data = generate_api_key(version_number)
+    secret_data = generate_webhook_secret()
+
+    api_key = APIKey(
+        institution_id=tenant.institution_id,
+        project_id=tenant.project_id,
+        architecture_version_id=arch_version.id,
+        key_hash=key_data["key_hash"],
+        key_prefix=key_data["key_prefix"],
+        name=body.key_name,
+        scopes=["runtime:submit", "runtime:read"],
+        is_active=True,
+        created_by=current_user.id,
+        webhook_secret_hash=secret_data["secret_hash"],
+        webhook_secret_prefix=secret_data["secret_prefix"],
+    )
+    db.add(api_key)
+    db.commit()
+    db.refresh(arch_version)
+
+    # Emit event
+    event_engine = EventEngine(db)
+    await event_engine.emit(
+        "architecture.compiled",
+        tenant.institution_id,
+        tenant.project_id,
+        {
+            "architecture_version_id": arch_version.id,
+            "version_number": version_number,
+            "workflows_linked": len(workflows),
+            "key_prefix": key_data["key_prefix"],
+        },
+    )
+
+    return CompileResponse(
+        architecture_version_id=arch_version.id,
+        version_number=version_number,
+        workflows_linked=len(workflows),
+        api_key=key_data["raw_key"],
+        api_key_prefix=key_data["key_prefix"],
+        webhook_secret=secret_data["raw_secret"],
+        webhook_secret_prefix=secret_data["secret_prefix"],
+        message=f"Architecture v{version_number} compiled. {len(workflows)} workflow(s) linked. Key issued once — copy it now.",
+    )
+
+
 @router.get("/architect/{arch_id}/visualization")
 def get_visualization(
     arch_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:read")),
 ):
     arch = _get_arch_or_404(arch_id, tenant, db)
     return {"visualization_config": arch.visualization_config, "version": arch.version}
@@ -378,6 +534,7 @@ def list_versions(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:read")),
 ):
     arch = _get_arch_or_404(arch_id, tenant, db)
     versions = (
@@ -396,6 +553,7 @@ def available_workflows(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:read")),
 ):
     """List workflows in this project that can be linked to a domain."""
     arch = _get_arch_or_404(arch_id, tenant, db)

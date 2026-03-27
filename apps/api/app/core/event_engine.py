@@ -16,11 +16,12 @@ except Exception:  # pragma: no cover
 
 
 class EventEngine:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, redis_client=None):
         self.db = db
         self.settings = get_settings()
-        self.redis_client = None
-        if redis and self.settings.redis_url:
+        self.redis_client = redis_client
+        # Backward compat: only create own connection if not provided
+        if self.redis_client is None and redis and self.settings.redis_url:
             try:
                 self.redis_client = redis.Redis.from_url(self.settings.redis_url, decode_responses=True)
             except Exception:

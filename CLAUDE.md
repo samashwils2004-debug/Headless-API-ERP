@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Local Environment Setup
+
 ```bash
 # Start backend services (Redis + API)
 docker-compose up
@@ -29,6 +30,7 @@ npm run web:dev:5173
 ```
 
 ### API Development
+
 ```bash
 # Run API directly (without Docker)
 cd apps/api
@@ -49,9 +51,12 @@ python apps/api/seed_demo.py
 cd apps/api
 alembic upgrade head
 alembic revision --autogenerate -m "description"
+alembic current
+alembic downgrade -1
 ```
 
 ### Web Development
+
 ```bash
 # From root directory
 npm run web:build
@@ -66,73 +71,187 @@ npm run build
 
 ## Core Architecture
 
+### Layer Boundaries (STRICT — never violate)
+
+```
+apps/api/app/
+├── core/              → Runtime Kernel. FROZEN. No upstream imports.
+├── control_plane/     → Deploys to runtime. Never executes transitions directly.
+├── ai/                → Generates proposals only. Never writes to DB directly.
+│   ├── blueprint/     → Mode A: workflow generation from natural language
+│   ├── architect/     → Mode B: ERP domain graph composition
+│   └── template_customizer/ → Mode C: template modification
+├── architecture/      → Design-time only. Never executes workflows.
+├── routes/            → Thin API layer. Business logic in services/engines.
+├── middleware/        → Rate limiting, auth, tenant context.
+└── models/            → All SQLAlchemy models in __init__.py
+```
+
+**Dependency rules:**
+
+- core CANNOT import from ai, architecture, or control_plane
+- ai CANNOT import from core or architecture
+- control_plane CANNOT import from architecture
+- architecture reads runtime metadata ONLY through registries, never direct SQL joins
+- Compilation is the ONLY architecture→runtime mutation path
+
 ### Multi-Tenant Data Model
+
 All data is scoped by **Institution** → **Project**. Every API request must include:
+
 - `X-Institution-Id` header
 - `X-Project-Id` header (for project-scoped resources)
 
-Core entities:
-- `Institution` - Top-level tenant (e.g., a university)
-- `Project` - Scoped environment within institution (e.g., "Fall 2024 Admissions")
+Core entities (14 models in `apps/api/app/models/__init__.py`):
+
+- `Institution` - Top-level tenant
+- `Project` - Scoped workspace within institution
 - `User` - Institution-scoped users with role-based permissions
-- `Workflow` - Versioned workflow definitions (immutable after deployment)
-- `Application` - Individual workflow instances
-- `Event` - Event log for all state transitions
+- `Workflow` - Versioned, immutable workflow definitions with embedded schema
+- `Application` - Individual workflow instances (runtime)
+- `Event` - Append-only event log for all state transitions
+- `BlueprintProposal` - AI-generated blueprints pending deployment
+- `RolePermission` - RBAC permission definitions
+- `ProjectRoleBinding` - User-project role assignments
+- `APIKey` - Versioned API keys linked to architecture versions
+- `WorkflowTemplate` - Pre-built workflow templates
+- `InstitutionArchitecture` - ERP domain graph per project
+- `ArchitectureVersion` - Immutable version snapshots of architecture
+- `ArchWorkflow` - Junction table linking architecture versions to workflows
+- `TemplateCustomization` - AI template modification proposals
+
+### Database
+
+- **Primary**: PostgreSQL on Aiven (connection in `apps/api/.env`)
+- **Local dev fallback**: SQLite (`admissions.db`) — for bootstrapping only
+- **ORM**: SQLAlchemy with models in `apps/api/app/models/__init__.py`
+- **Migrations**: Alembic at `apps/api/alembic/`
+- PostgreSQL tables managed by `alembic upgrade head`
+- SQLite tables auto-created by `init_db()` for local convenience
+- **Pool settings for Aiven free tier**: DB_POOL_SIZE=3, DB_MAX_OVERFLOW=2 (stay under 20 connection limit)
+
+### Service Registry (IMPORTANT — use this pattern)
+
+All shared component instances live in `apps/api/app/services.py`. **Never instantiate these directly in routes:**
+
+```python
+# CORRECT — use the registry
+from app.services import get_event_engine, get_blueprint_generator, get_context_builder, get_workflow_engine
+
+event_engine = get_event_engine(db)         # Shared Redis connection
+generator = get_blueprint_generator()        # Singleton
+context = get_context_builder()              # Singleton
+engine = get_workflow_engine(db)             # Per-request (needs DB session)
+
+# WRONG — creates new Redis connection every time
+from app.core.event_engine import EventEngine
+event_engine = EventEngine(db)               # DO NOT DO THIS IN NEW CODE
+```
+
+The old `EventEngine(db)` pattern still works as fallback but opens a new Redis connection per instantiation. All new code must use the registry.
 
 ### Workflow Engine (Deterministic State Machine)
 
-The workflow engine (`apps/api/app/workflow.py`) is **deterministic and safe**:
-- **NO `eval()` or dynamic code execution** - only safe condition parsing
-- Conditions use simple operators: `>=`, `>`, `<=`, `<`, `==`, `!=`
-- Example condition: `gpa >= 3.5` or `test_score > 1200`
-- State machines are defined in JSON with three state types:
-  - `initial` - Entry state
-  - `intermediate` - Transition states
-  - `terminal` - Final states (completes workflow)
+The workflow engine (`apps/api/app/core/workflow_engine.py`) is **deterministic and safe**:
 
-Workflows are **immutable after deployment** and versioned for auditability.
+- **NO `eval()` or dynamic code execution** - only safe condition parsing via `ConditionParser`
+- Conditions use simple operators: `>=`, `>`, `<=`, `<`, `==`, `!=`, `and`, `or`
+- No function calls, no method invocation, no nested expressions beyond one level
+- State machines defined in JSON with three state types: `initial`, `intermediate`, `terminal`
+- Workflows are **immutable after deployment** and versioned for auditability
 
-**Workflow execution pattern**:
-```python
-from app.workflow import WorkflowEngine
+### Schema Embedded in Workflow Definition
 
-engine = WorkflowEngine(db)
+Workflow definitions include an embedded `schema` section that defines application data fields:
 
-# Start a new workflow instance
-instance_id = engine.start_workflow(
-    workflow_name="undergraduate_admissions",
-    application_id=app_id,
-    context={"gpa": 3.8, "test_score": 1400}  # Used for automatic transitions
-)
-
-# Manual transition (e.g., reviewer action)
-engine.transition(
-    instance_id=instance_id,
-    to_state="under_review",
-    user_id=current_user.id
-)
+```json
+{
+  "initial_state": "submitted",
+  "states": { ... },
+  "schema": {
+    "fields": [
+      {"name": "percentage", "type": "number", "required": true, "min": 0, "max": 100},
+      {"name": "name", "type": "string", "required": true},
+      {"name": "email", "type": "string", "required": true, "format": "email"}
+    ]
+  },
+  "roles": [
+    {"id": "admissions_officer", "name": "Admissions Officer", "permissions": ["application:read", "application:approve"]}
+  ],
+  "events": [
+    {"type": "application.auto_accepted", "emit_on": "transition to auto_accepted"}
+  ]
+}
 ```
 
-**Automatic transitions**: If a state has `"automatic": true` transitions, they're evaluated immediately when entering that state. The condition is checked against the context dict.
+Schema, roles, and events travel WITH the workflow definition. When a workflow is version-pinned to an architecture, the schema is pinned too. No separate schema tables.
+
+The runtime API validates incoming `applicant_data` against the embedded schema BEFORE executing transitions.
 
 ### AI Blueprint Generation
 
 AI-powered workflow creation flow (`apps/api/app/ai/blueprint_generator.py`):
+
 1. User submits natural language prompt
-2. System calls **ProviderRouter cascade**: Gemini → Groq → Mock (first available)
-3. AI generates workflow blueprint (JSON)
-4. **Four-stage validation** (`BlueprintGenerator.validate()`):
-   - **Stage 1 - Schema**: JSON schema validation against `packages/blueprint-schema/`
-   - **Stage 2 - Graph Integrity**: State connectivity, reachability analysis
-   - **Stage 3 - Permission Analysis**: RBAC validation for workflow actions
-   - **Stage 4 - Compliance**: Regulatory compliance checks (no eval, injection prevention)
-5. User reviews validated blueprint
-6. User deploys → creates versioned Workflow
+2. **Context builder** enriches prompt with existing project workflows (field names, roles, events)
+3. **ProviderRouter cascade**: Gemini 2.5 Flash → Groq → Mock (first available)
+4. AI generates workflow blueprint including schema, roles, events
+5. **Four-stage validation** (schema, graph integrity, permissions, compliance)
+6. User reviews validated blueprint
+7. User deploys → creates versioned Workflow
+
+**Context-carrying**: When generating the 2nd+ workflow in a project, the AI receives context about existing workflows — field names, roles, events — to maintain consistency. This is handled by `BlueprintContextBuilder` in `apps/api/app/ai/blueprint/context_builder.py`.
+
+The blueprint section is NOT a separate page. Its logic is embedded in the workflow creation flow. The developer sees "Generate with AI" on the workflow canvas, not a separate blueprint page.
 
 AI provider configuration in `apps/api/app/config.py`:
-- `GEMINI_API_KEY` (preferred, tried first)
-- `GROQ_API_KEY` (fallback, tried second)
+
+- `GEMINI_API_KEY` (preferred, Gemini 2.5 Flash)
+- `GROQ_API_KEY` (fallback)
 - Mock responses if no keys provided (development mode)
+- AI responses cached in Redis for 24 hours (SHA-256 keyed)
+
+### Prototype Flow
+
+```
+Create Project → Select Project → Build Workflows (canvas + AI + embedded schema)
+  → Deploy Workflows → Architect (link workflows) → Compile → Versioned API Key → Runtime API
+```
+
+### Compile Flow (Architect → API Key)
+
+When the developer clicks Compile on the Architect page:
+
+1. Validate all selected workflows are deployed and belong to the project
+2. Create immutable `ArchitectureVersion` with graph snapshot
+3. Create `ArchWorkflow` junction records (version-pinned)
+4. Generate API key: `sk_erp_v{version}_{32_hex_chars}` — hash stored, raw shown once
+5. Generate webhook secret: `whsec_erp_{32_hex_chars}` — separate from API key
+6. Emit `architecture.compiled` event
+7. Return raw key and secret (shown once, then masked forever)
+
+**No test/production environment split.** Draft vs deployed workflow status IS the safety boundary. All keys are `sk_erp_v{n}_...` without environment prefix.
+
+### Runtime API (External-facing)
+
+External developers call the runtime API with their versioned API key:
+
+- `POST /api/v1/applications` — submit application (validates against embedded schema)
+- `GET /api/v1/applications/{id}` — get status
+- `GET /api/v1/applications` — list with filters
+- Authentication: `Authorization: Bearer sk_erp_v1_...` (API key, NOT JWT)
+- Tenant context derived from API key, NOT from headers
+- Workflow access restricted to those linked in the architecture version
+- CSRF checks skipped for `/api/v1/` routes (external API, no cookies)
+
+### API Key Re-versioning
+
+Schema or workflow changes require:
+
+1. Create new workflow version (deployed workflows are immutable)
+2. Deploy the new version
+3. Recompile architecture → new API key (`sk_erp_v2_...`)
+4. Old key still works against old workflow versions (version pinning)
 
 ### Event-Native Architecture
 
@@ -150,29 +269,20 @@ AI provider configuration in `apps/api/app/config.py`:
 3. **WebSocket broadcast** (real-time)
    - Clients connect to `/api/events/ws?institution_id=...&project_id=...`
    - Hub broadcasts events to all connected clients
-   - Managed by `app.ws.hub`
 
-Event types: `workflow.deployed`, `workflow.transition`, `application.created`, `ai.blueprint.deployed`, etc.
+Event types: `workflow.deployed`, `workflow.transitioned`, `application.submitted`, `architecture.compiled`, `ai.blueprint.deployed`, etc.
 
-**Usage pattern**: All state changes must emit events via `EventEngine.emit()`
+**Usage**: Always use `get_event_engine(db)` from the service registry. Never `EventEngine(db)` directly.
 
 ### Security Features
 
-1. **CSRF Protection**: Double-submit cookie pattern for mutations
-2. **Rate Limiting**: Redis-backed rate limiter middleware
-3. **Security Headers**: X-Content-Type-Options, X-Frame-Options, CSP
-4. **Row-Level Security**: Supabase RLS for multi-tenant isolation (optional)
-5. **API Key Authentication**: SHA-256 hashed keys with scopes
-6. **No Dynamic Execution**: Safe condition parsing only
-7. **RBAC Engine**: Role-based access control with project-scoped permissions (see below)
-
-### Database
-
-- **Development**: SQLite (`admissions.db`)
-- **Production**: PostgreSQL (required, enforced in config validation)
-- **Supabase Integration**: Optional for Storage + RLS (see `SUPABASE_RUNBOOK.md`)
-
-Database migrations use Alembic (`apps/api/alembic/`).
+1. **CSRF Protection**: Double-submit cookie pattern for mutations (skipped for `/api/v1/` runtime routes)
+2. **Rate Limiting**: Redis-backed rate limiter middleware (AI: 10/min, auth: 20/min, authenticated: 600/min)
+3. **Security Headers**: X-Content-Type-Options, X-Frame-Options, CSP, HSTS in production
+4. **API Key Authentication**: SHA-256 hashed keys, versioned, linked to architecture versions
+5. **No Dynamic Execution**: Safe condition parsing only via ConditionParser
+6. **RBAC Engine**: Role-based access control with project-scoped permissions
+7. **Multi-Tenant Isolation**: All queries scoped by institution_id + project_id
 
 ### RBAC (Role-Based Access Control)
 
@@ -182,31 +292,23 @@ Database migrations use Alembic (`apps/api/alembic/`).
 - `reviewer` - Can read, write applications, compile blueprints (project-level)
 - `viewer` - Read-only access (project-level)
 
-**Permission format**: `{resource}:{action}` (e.g., `workflow:write`, `blueprint:deploy`)
+**Permission format**: `{resource}:{action}` (e.g., `workflow:write`, `blueprint:deploy`, `architecture:compile`)
 
 **How it works**:
-1. Every route uses `Depends(check_permission("resource:action"))`
-2. RBAC engine checks:
-   - User's institution_id matches tenant context (cross-tenant protection)
-   - User has project-scoped role binding (for non-owner roles)
-   - User's role grants the required permission
-3. Throws 403 if any check fails
 
-**Custom permissions** can be added via `RolePermission` table (overrides defaults).
+1. Every route uses `Depends(check_permission("resource:action"))`
+2. RBAC engine checks user's institution, project binding, and role permissions
+3. Throws 403 if any check fails
 
 ### Observability
 
 - **Metrics**: Prometheus-compatible endpoint at `/metrics`
-  - `events_emitted{event_type}` - Event emission counter
-  - `blueprint_validation_failures{stage}` - Validation failures by stage
-  - `http_requests_total{method,path,status}` - HTTP metrics
 - **Health Check**: `/health` returns status, version, environment
 - **Sentry**: Optional error tracking (set `SENTRY_DSN`)
-- **Structured Logging**: Request/response logging with correlation IDs
 
 ## Key Invariants
 
-These system invariants are enforced (see `apps/api/app/main.py`):
+These system invariants are enforced and must NEVER be broken:
 
 ```python
 {
@@ -215,182 +317,119 @@ These system invariants are enforced (see `apps/api/app/main.py`):
     "ai_four_stage_validation": True,     # AI blueprints must pass 4-stage validation
     "multi_tenant_isolation": True,       # Institution/project data isolation
     "dynamic_code_execution": False,      # NO eval() or exec()
+    "human_in_the_loop": True,           # No auto-deployment of AI output
+    "version_pinning": True,             # Applications pinned to workflow version at creation
 }
 ```
 
 ## Frontend Structure
 
-Next.js app with route groups:
-- `(landing)` - Marketing pages (/, /architecture, /pricing)
-- `(auth)` - Authentication pages (/login)
-- `console` - Authenticated admin console (requires login)
-  - `/console` - Dashboard with metrics, trends, and quick actions
-  - `/console/workflows` - Workflow management
-  - `/console/ai` - AI Generator for blueprint compilation
-  - `/console/architect` - Institutional Architect with domain composition
-  - `/console/projects` - Project management
-  - `/console/api-keys` - API key management
-  - `/console/templates` - Workflow templates
-  - `/console/events` - Event stream viewer
-  - `/console/settings` - Settings with General, Security, and Runtime tabs
-- `docs` - Documentation site
+### Key Directories
 
-Component organization:
-- `components/ui` - shadcn/ui components (Radix + Tailwind)
-- `components/console` - Console-specific components (ConsoleShell, ConsoleProvider)
+- `components/console` - Console control plane UI components
+- `components/ui` - shadcn/ui base components
 - `components/landing` - Landing page sections
 - `components/docs` - Documentation components
 - `components/interactive` - Interactive demos
 - `components/shared` - Shared utilities (Terminal, JsonViewer, etc.)
+- `lib/enforcement` - Frontend guards (immutability, deployment, tenant, validation)
 
 ### Console Pages Architecture
 
 **Dashboard** (`/console/page.tsx`):
-- Enhanced metric cards with trend indicators (TrendBadge component)
-- StatCard component showing workflows, deployments, events, health score
-- Quick Actions panel with 3 action cards (Deploy Template, Generate with AI, Create API Key)
-- Recent Activity feed with live event stream
-- Event Type Distribution chart
+
+- Metric cards, quick actions, recent activity with live event stream
 - Uses `useEventStream` hook for real-time WebSocket updates
 
-**Architect** (`/console/architect/page.tsx`):
-- Institution Context Builder:
-  - Institution Type: university/college/edtech/corporate
-  - Institution Size: small/medium/large/enterprise
-  - Compliance Tags: FERPA, GDPR, HIPAA, SOC2, ISO27001
-- Example prompts for quick start
-- Real API integration with `/api/ai/blueprints/compile`
-- Version management and status tracking (draft/compiled/deployed)
-- Toast notifications with Sonner library
-- Uses localStorage for auth tokens
+**Workflows** (`/console/workflows/`):
 
-**Settings** (`/console/settings/page.tsx`):
-- Tabbed interface with 3 sections:
-  1. General: Institution ID, Active Project, Environment selector
-  2. Security: JWT expiry, CSRF, password hashing, multi-tenant isolation
-  3. Runtime: Workflow execution defaults, event stream config
-- Sidebar navigation with icons
-- Form controls with save functionality
-- Toast notifications for success feedback
+- React Flow canvas for visual workflow building (3 node types: initial, intermediate, terminal)
+- AI generation via "Generate with AI" button (calls blueprint compile endpoint)
+- Schema editor in detail panel (auto-infers fields from conditions)
+- Manual + AI creation paths, both produce same JSON output
+
+**Architect** (`/console/architect/page.tsx`):
+
+- NLP intent parser routes user input (no AI call for routing)
+- Domain graph composition via AI (Mode B)
+- Workflow linking and compile flow
+- Version management
+
+**Events** (`/console/events/`):
+
+- Real-time event stream via WebSocket
+- Reverse chronological, filterable by type
+- Shows all workflow deployments, compilations, submissions, transitions
+
+**API Keys** (shown after compile):
+
+- Versioned keys with masked display
+- Raw key shown once on compile, then only prefix visible
 
 ### Authentication & Session Management
 
-**Middleware** (`apps/web/middleware.ts`):
-- Checks for `access_token` cookie on all `/console` routes
-- Redirects unauthenticated users to `/login?next=/console/...`
-- Redirects authenticated users away from `/login` to `/console`
-- Sets security headers (CSP, X-Frame-Options, etc.)
+**Login Flow**:
 
-**Login Flow** (`apps/web/src/app/api/auth/login/route.ts`):
-- Proxies to backend `/api/auth/login`
-- Sets cookies on successful login:
-  - `access_token` (httpOnly, 7 days expiration)
-  - `refresh_token` (httpOnly, 30 days)
-  - `csrf_token` (30 days)
-  - `institution_id` (30 days)
-- All cookies use `sameSite: "lax"` and `secure` in production
-
-**Session Persistence**:
-- Backend JWT tokens expire in 7 days (`access_token_expire_minutes: 10080`)
-- Cookies persist for 30 days to enable long-term sessions
-- No automatic token refresh implemented (tokens last 7 days)
-- Users stay logged in across browser sessions
+- Backend JWT tokens (7-day expiry)
+- Cookies persist 30 days
+- Middleware redirects unauthenticated users from `/console` to `/login`
 
 ## Configuration
 
 Environment variables (`.env`):
+
 ```bash
-# Required
-DATABASE_URL=postgresql://...      # Postgres in production
+# Database
+DATABASE_URL=postgresql+psycopg2://avnadmin:...@pg-xxx.aivencloud.com:17475/defaultdb?sslmode=require
+DB_POOL_SIZE=3
+DB_MAX_OVERFLOW=2
+
+# Auth
 SECRET_KEY=...                     # Min 32 chars in production
+ALGORITHM=HS256
+
+# Optional — Redis (event streams, caching, rate limiting)
 REDIS_URL=redis://localhost:6379/0
 
-# Optional AI providers
+# Optional — AI providers (cascade: Gemini → Groq → Mock)
 GEMINI_API_KEY=...
 GROQ_API_KEY=...
 
-# Optional integrations
+# Optional — monitoring
 SENTRY_DSN=...
-SUPABASE_URL=...
-SUPABASE_SERVICE_ROLE_KEY=...
-
-# Frontend
-NEXT_PUBLIC_API_URL=http://localhost:8000  # Backend API base URL
 ```
 
-**Important Config Notes**:
-- `access_token_expire_minutes` is set to `10080` (7 days) in `apps/api/app/config.py` for persistent login
-- Frontend cookies are set to 30 days maxAge for long-term session persistence
-- In development, cookies use `secure: false`; in production, `secure: true`
+**Important**: No Supabase dependency. Previous Supabase integration was removed after ISP blocking in India. Database is Aiven PostgreSQL.
 
 ## Testing Strategy
 
-Test organization:
-- `tests/unit` - Unit tests (condition parser, RBAC, blueprint validation)
-- `tests/integration` - Integration tests (workflow + events, observability)
-- `tests/security` - Security invariant tests
-
-Run tests from repository root:
 ```bash
 # All tests
 python -m pytest apps/api/tests
 
-# Specific test file
-python -m pytest apps/api/tests/unit/test_condition_parser.py
-
-# Specific test function
-python -m pytest apps/api/tests/unit/test_condition_parser.py::test_basic_conditions
+# Specific categories
+python -m pytest apps/api/tests/unit
+python -m pytest apps/api/tests/integration
+python -m pytest apps/api/tests/security
 
 # With coverage
 python -m pytest apps/api/tests --cov=app
 ```
 
-### Test Fixtures (apps/api/tests/conftest.py)
-
-**Key fixtures available**:
-- `reset_db` - Auto-used, drops and recreates all tables before each test
-- `db_session` - Provides a database session
-- `client` - FastAPI TestClient
-- `seeded` - Pre-populated test database with:
-  - Two institutions (inst1, inst2)
-  - Two projects (proj1, proj2)
-  - Three users (owner, reviewer, outsider_owner)
-  - One deployed workflow
-  - One project role binding (reviewer → proj1)
-- `make_headers` - Helper to create authenticated request headers
-
-**Test pattern**:
-```python
-def test_endpoint(client, seeded, make_headers):
-    headers = make_headers(seeded["owner"], seeded["inst1"].id, seeded["proj1"].id)
-    response = client.get("/api/workflows", headers=headers)
-    assert response.status_code == 200
-```
-
-## Important Files
-
-- `apps/api/app/main.py` - FastAPI app initialization and middleware
-- `apps/api/app/workflow.py` - Deterministic workflow engine
-- `apps/api/app/models/__init__.py` - SQLAlchemy data models
-- `apps/api/app/config.py` - Configuration with validation
-- `apps/api/app/database.py` - Database connection and session management
-- `packages/blueprint-schema/workflow.schema.json` - Workflow JSON schema
-- `apps/web/src/app/layout.tsx` - Root Next.js layout
-
 ## Common Development Patterns
 
 ### Adding a New API Route
 
-**Standard route signature**:
 ```python
+from app.services import get_event_engine
+
 @router.post("/resource")
 async def create_resource(
     payload: ResourceCreate,
-    tenant: TenantContext = Depends(get_tenant_context),  # Required for multi-tenancy
-    user = Depends(check_permission("resource:write")),   # RBAC check
-    db: Session = Depends(get_db),                         # Database session
+    tenant: TenantContext = Depends(get_tenant_context),
+    user = Depends(check_permission("resource:write")),
+    db: Session = Depends(get_db),
 ):
-    # 1. Create resource with tenant scoping
     resource = Resource(
         institution_id=tenant.institution_id,
         project_id=tenant.project_id,
@@ -401,58 +440,49 @@ async def create_resource(
     db.commit()
     db.refresh(resource)
 
-    # 2. Emit event for state change
-    event_engine = EventEngine(db)
-    await event_engine.emit(
+    await get_event_engine(db).emit(
         "resource.created",
         tenant.institution_id,
         tenant.project_id,
         {"resource_id": resource.id}
     )
-
     return resource
 ```
 
-**Key requirements**:
-- Always use `get_tenant_context()` for multi-tenant scoping
-- Always use `check_permission()` for RBAC enforcement
-- Always scope data by `institution_id` and `project_id`
-- Always emit events for state changes via `EventEngine`
-- Never trust client-provided tenant IDs (use header values)
-
 ### Adding a New Model
+
 1. Define in `apps/api/app/models/__init__.py`
-2. Add tenant scoping columns:
-   ```python
-   institution_id = Column(String, ForeignKey("institutions.id"), nullable=False, index=True)
-   project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
-   ```
-3. Create Alembic migration: `alembic revision --autogenerate -m "add model"`
-4. Apply migration: `alembic upgrade head`
-
-### Emitting Events
-```python
-from app.core.event_engine import EventEngine
-
-event_engine = EventEngine(db)
-await event_engine.emit(
-    event_type="workflow.deployed",          # Use dot notation: resource.action
-    institution_id=tenant.institution_id,
-    project_id=tenant.project_id,
-    data={"workflow_id": workflow.id},       # Any JSON-serializable dict
-    version="1.0"                            # Optional, defaults to "1.0"
-)
-```
+2. Add tenant scoping: `institution_id` and `project_id` foreign keys
+3. Create migration: `cd apps/api && alembic revision --autogenerate -m "add model"`
+4. Apply: `alembic upgrade head`
 
 ### Enforcing Workflow Immutability
+
 ```python
 if workflow.deployed:
     raise HTTPException(status_code=409, detail="Deployed workflows are immutable")
 ```
-This pattern is critical - deployed workflows MUST NOT be modified (see invariants).
 
-### Adding a New UI Component
-1. Use shadcn/ui patterns for consistency
-2. Place in appropriate folder (ui/landing/docs/shared)
-3. Follow Tailwind CSS conventions
-4. Ensure dark mode compatibility (using next-themes)
+### 500-Line Rule
+
+No service file may exceed 500 lines. Split into modules if approaching this limit.
+
+## Important Files
+
+- `apps/api/app/main.py` - FastAPI app initialization, middleware, router mounting
+- `apps/api/app/services.py` - Service registry (shared singletons)
+- `apps/api/app/models/__init__.py` - All SQLAlchemy models (14 tables)
+- `apps/api/app/config.py` - Configuration with validation
+- `apps/api/app/database.py` - Database connection and session management
+- `apps/api/app/core/workflow_engine.py` - Deterministic state machine executor
+- `apps/api/app/core/event_engine.py` - Three-tier event emission
+- `apps/api/app/core/condition_parser.py` - Safe condition evaluation (no eval)
+- `apps/api/app/core/rbac_engine.py` - Role-based access control
+- `apps/api/app/ai/blueprint_generator.py` - AI blueprint generation with 4-stage validation
+- `apps/api/app/ai/provider_router.py` - Gemini → Groq → Mock cascade
+- `apps/api/app/ai/blueprint/context_builder.py` - Project-aware AI context
+- `apps/api/app/ai/architect/` - Mode B ERP composition (NLP parser, prompt factory, visualization)
+- `apps/api/app/core/api_key_utils.py` - Key and webhook secret generation
+- `apps/api/app/middleware/api_key_auth.py` - Runtime API authentication
+- `apps/api/app/routes/runtime.py` - External-facing runtime API
+- `packages/blueprint-schema/workflow.schema.json` - Workflow JSON schema

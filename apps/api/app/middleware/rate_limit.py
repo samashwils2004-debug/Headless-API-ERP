@@ -69,7 +69,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         is_authenticated = auth_header.startswith("Bearer ")
 
         # Determine rate limit tier
-        if "/api/ai/" in path:
+        if "/api/ai/" in path or "/api/architect/" in path:
             limit_name = "ai"
             limit, window = LIMITS["ai"]
             key = f"orquestra:rl:ai:{ip}"

@@ -68,9 +68,9 @@ const QUICK_ACTIONS = [
     icon: LayoutTemplate,
   },
   {
-    label: "Generate with AI",
-    description: "Compile a blueprint from natural language",
-    href: "/console/ai",
+    label: "Build Workflow",
+    description: "Create or generate a workflow with AI assist",
+    href: "/console/workflows",
     icon: Cpu,
   },
   {

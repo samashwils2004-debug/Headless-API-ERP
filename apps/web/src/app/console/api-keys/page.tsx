@@ -1,83 +1,161 @@
 "use client";
 
-import { useState } from "react";
-import { KeyRound, Plus, Copy, Check, ShieldAlert } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { KeyRound, Copy, Check, ShieldAlert, Trash2, Loader2, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import { listApiKeys, revokeApiKey, type ApiKeyItem } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 
 export default function ApiKeysPage() {
   const context = useProjectContextStore((s) => s.context);
+  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
 
-  const mockKeys = [
-    { id: "key_1", name: "Production Backend Integration", prefix: "sk_live_erp_v2_", created: "2026-02-15", lastUsed: "10 mins ago" },
-    { id: "key_2", name: "Student Portal Test Key", prefix: "sk_test_erp_v1_", created: "2026-01-10", lastUsed: "Yesterday" }
-  ];
+  const tenant = { institutionId: context.institutionId, projectId: context.projectId };
+  const noProject = !context.institutionId || !context.projectId;
+
+  const load = useCallback(async () => {
+    if (noProject) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const data = await listApiKeys(tenant);
+      setKeys(data.keys);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load API keys");
+    } finally {
+      setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.institutionId, context.projectId]);
+
+  useEffect(() => { load(); }, [load]);
 
   const handleCopy = (prefix: string) => {
-    navigator.clipboard.writeText(prefix + "****************");
+    navigator.clipboard.writeText(prefix + "…").catch(() => {});
     setCopied(prefix);
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleRevoke = async (keyId: string, name: string) => {
+    if (!confirm(`Revoke key "${name}"? This cannot be undone.`)) return;
+    setRevoking(keyId);
+    try {
+      await revokeApiKey(tenant, keyId);
+      setKeys((prev) => prev.filter((k) => k.id !== keyId));
+      toast.success("API key revoked");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke key");
+    } finally {
+      setRevoking(null);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-[var(--text-primary)]">API Keys</h2>
-          <p className="text-sm text-[var(--text-secondary)]">Manage version-pinned API keys for your institutional platform integrations.</p>
+          <h2 className="text-2xl font-semibold" style={{ color: "#f4f4f5" }}>API Keys</h2>
+          <p className="text-sm mt-1" style={{ color: "#71717a" }}>
+            Version-pinned keys for your institutional runtime integrations.
+          </p>
         </div>
-        <button className="flex items-center gap-2 rounded-md bg-[var(--text-accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-primary)] hover:bg-blue-600 transition-colors">
-          <Plus size={16} /> Generate New Key
-        </button>
+        <a
+          href="/console/architect"
+          className="flex items-center gap-2 rounded px-4 py-2 text-sm font-medium border transition-colors hover:bg-[#1b1b24]"
+          style={{ borderColor: "#25252b", color: "#a1a1aa" }}
+        >
+          <ExternalLink size={14} />
+          Compile new key
+        </a>
       </div>
 
-      <div className="rounded-md border border-amber-900/50 bg-amber-900/10 p-4 flex gap-3 text-amber-500 text-sm">
+      <div className="rounded border flex gap-3 p-4 text-sm" style={{ background: "#1a1400", borderColor: "#ca8a04" + "40", color: "#ca8a04" }}>
         <ShieldAlert size={18} className="shrink-0 mt-0.5" />
         <div>
-          <strong className="block mb-1 font-semibold text-amber-400">Version-Pinned Keys</strong>
-          API keys generated here are intrinsically bound to the active Workflow Blueprint version. Upgrading your backend architecture requires rolling to a new <code>v[x]</code> key. Keys cannot escalate privileges post-creation.
+          <strong className="block mb-1" style={{ color: "#facc15" }}>Version-Pinned Keys</strong>
+          API keys are bound to a compiled architecture version. Any schema or workflow change requires recompiling — which issues a new <code className="font-mono text-xs">sk_erp_v[n]_…</code> key. Old keys continue to work against their pinned version.
         </div>
       </div>
 
-      <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#1a1a20] border-b border-[var(--border-default)] text-[var(--text-secondary)]">
-            <tr>
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Token Prefix</th>
-              <th className="px-4 py-3 font-medium">Created On</th>
-              <th className="px-4 py-3 font-medium">Last Used</th>
-              <th className="px-4 py-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border-default)]">
-            {mockKeys.map((key) => (
-              <tr key={key.id} className="hover:bg-[var(--bg-tertiary)] transition-colors">
-                <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{key.name}</td>
-                <td className="px-4 py-3">
-                  <div className="inline-flex items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-2.5 py-1 font-mono text-[11px] text-gray-400">
-                    {key.prefix}****************
-                    <button onClick={() => handleCopy(key.prefix)} className="hover:text-white transition-colors ml-2">
-                      {copied === key.prefix ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-[var(--text-secondary)]">{key.created}</td>
-                <td className="px-4 py-3 text-[var(--text-secondary)]">{key.lastUsed}</td>
-                <td className="px-4 py-3 text-right">
-                  <button className="text-red-500 hover:text-red-400 font-medium">Revoke</button>
-                </td>
+      {noProject ? (
+        <div className="flex items-center justify-center h-40 rounded border" style={{ borderColor: "#1c1c22", background: "#141418" }}>
+          <p className="text-sm" style={{ color: "#52525b" }}>Select a project to see API keys.</p>
+        </div>
+      ) : loading ? (
+        <div className="flex items-center justify-center h-40">
+          <Loader2 size={20} className="animate-spin" style={{ color: "#3b82f6" }} />
+        </div>
+      ) : keys.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-48 rounded border" style={{ borderColor: "#1c1c22", background: "#141418" }}>
+          <KeyRound size={28} className="mb-3 opacity-20" style={{ color: "#f4f4f5" }} />
+          <p className="text-sm" style={{ color: "#71717a" }}>No active API keys.</p>
+          <p className="text-xs mt-1" style={{ color: "#52525b" }}>
+            Go to{" "}
+            <a href="/console/architect" className="underline" style={{ color: "#3b82f6" }}>
+              Architect
+            </a>{" "}
+            and compile an architecture to generate a key.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded border overflow-hidden" style={{ borderColor: "#1c1c22", background: "#141418" }}>
+          <table className="w-full text-left text-sm">
+            <thead style={{ background: "#1a1a20", borderBottom: "1px solid #25252b" }}>
+              <tr>
+                <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Name</th>
+                <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Key Prefix</th>
+                <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Scopes</th>
+                <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Created</th>
+                <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Last Used</th>
+                <th className="px-4 py-3 text-right font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {mockKeys.length === 0 && (
-          <div className="p-8 text-center text-[var(--text-secondary)]">
-            <KeyRound size={24} className="mx-auto mb-3 opacity-50" />
-            <p>No active API keys found for project {context.projectName}.</p>
-          </div>
-        )}
-      </div>
+            </thead>
+            <tbody>
+              {keys.map((key) => (
+                <tr key={key.id} style={{ borderTop: "1px solid #1c1c22" }}>
+                  <td className="px-4 py-3 font-medium" style={{ color: "#f4f4f5" }}>{key.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="inline-flex items-center gap-2 rounded border px-2.5 py-1 font-mono text-[11px]" style={{ borderColor: "#25252b", background: "#0f0f12", color: "#a1a1aa" }}>
+                      {key.key_prefix}…
+                      <button onClick={() => handleCopy(key.key_prefix)} className="ml-1 transition-colors hover:text-white">
+                        {copied === key.key_prefix ? <Check size={13} style={{ color: "#4ade80" }} /> : <Copy size={13} />}
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {key.scopes.map((s) => (
+                        <span key={s} className="rounded px-1.5 py-0.5 text-[10px] font-mono" style={{ background: "#1b1b24", color: "#71717a" }}>
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "#71717a" }}>
+                    {new Date(key.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "#71717a" }}>
+                    {key.last_used_at ? new Date(key.last_used_at).toLocaleString() : "Never"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => handleRevoke(key.id, key.name)}
+                      disabled={revoking === key.id}
+                      className="flex items-center gap-1 ml-auto rounded px-2 py-1 text-xs transition-colors hover:bg-red-900/20 disabled:opacity-50"
+                      style={{ color: "#ef4444" }}
+                    >
+                      {revoking === key.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

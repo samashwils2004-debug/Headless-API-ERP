@@ -65,7 +65,12 @@ def get_db():
 def init_db():
     """Initialize database tables."""
     from app import models  # noqa: F401
-    Base.metadata.create_all(bind=engine)
-    if settings.environment == "development":
-        safe_database_url = make_url(settings.database_url).render_as_string(hide_password=True)
-        print(f"Database initialized: {safe_database_url}")
+    if "sqlite" in settings.database_url:
+        Base.metadata.create_all(bind=engine)
+        if settings.environment == "development":
+            safe_url = make_url(settings.database_url).render_as_string(hide_password=True)
+            print(f"Database initialized (SQLite): {safe_url}")
+    else:
+        if settings.environment == "development":
+            safe_url = make_url(settings.database_url).render_as_string(hide_password=True)
+            print(f"Database connected (PostgreSQL — managed by Alembic): {safe_url}")

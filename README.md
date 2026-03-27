@@ -6,6 +6,30 @@ Orquestra is a headless, AI-native ERP infrastructure for universities and edtec
 
 This repo implements programmable institutional workflows as deterministic state machines. Developers describe processes in English; AI generates/deploys infrastructure including workflows, schemas, roles, and events. Targets admissions, expanding to registration/HR.
 
+## Local Development
+
+Start the full stack from the repo root so the frontend and backend stay in sync:
+
+```bash
+npm run dev
+```
+
+That single command starts:
+
+- FastAPI on `http://0.0.0.0:8000`
+- Next.js on `http://localhost:3000`
+
+If you prefer starting from `apps/web`, use:
+
+```bash
+npm run dev:stack
+```
+
+Demo login:
+
+- Email: `owner@demo.edu`
+- Password: `DemoPass123!@#`
+
 ![Master architecture: 4-layer control plane from client surfaces to data persistence.]
 
 ## Features

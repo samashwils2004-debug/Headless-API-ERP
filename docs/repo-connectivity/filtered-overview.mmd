@@ -1,0 +1,115 @@
+flowchart LR
+  subgraph Frontend["Frontend Callers"]
+    apps_web_src_app__auth__login_page_tsx["apps/web/src/app/(auth)/login/page.tsx"]
+    apps_web_src_app_console_architect_page_tsx["apps/web/src/app/console/architect/page.tsx"]
+    apps_web_src_lib_console_api_ts["apps/web/src/lib/console-api.ts"]
+    apps_web_src_lib_hooks_useEventStream_ts["apps/web/src/lib/hooks/useEventStream.ts"]
+  end
+  subgraph NextApi["Next API Bridge"]
+    apps_web_src_app_api_admin_dashboard_route_ts["apps/web/src/app/api/admin/dashboard/route.ts"]
+    apps_web_src_app_api_ai_compile_route_ts["apps/web/src/app/api/ai/compile/route.ts"]
+    apps_web_src_app_api_ai_deploy__proposalId__route_ts["apps/web/src/app/api/ai/deploy/[proposalId]/route.ts"]
+    apps_web_src_app_api_applications__applicationId__transition_route_ts["apps/web/src/app/api/applications/[applicationId]/transition/route.ts"]
+    apps_web_src_app_api_applications_route_ts["apps/web/src/app/api/applications/route.ts"]
+    apps_web_src_app_api_architect__id__available_workflows_route_ts["apps/web/src/app/api/architect/[id]/available-workflows/route.ts"]
+    apps_web_src_app_api_architect__id__link_workflow_route_ts["apps/web/src/app/api/architect/[id]/link-workflow/route.ts"]
+    apps_web_src_app_api_architect__id__prompt_route_ts["apps/web/src/app/api/architect/[id]/prompt/route.ts"]
+    apps_web_src_app_api_architect__id__route_ts["apps/web/src/app/api/architect/[id]/route.ts"]
+    apps_web_src_app_api_architect__id__versions_route_ts["apps/web/src/app/api/architect/[id]/versions/route.ts"]
+    apps_web_src_app_api_architect__id__visualization_route_ts["apps/web/src/app/api/architect/[id]/visualization/route.ts"]
+    apps_web_src_app_api_architect_route_ts["apps/web/src/app/api/architect/route.ts"]
+    apps_web_src_app_api_auth_login_route_ts["apps/web/src/app/api/auth/login/route.ts"]
+    apps_web_src_app_api_auth_logout_route_ts["apps/web/src/app/api/auth/logout/route.ts"]
+    apps_web_src_app_api_auth_me_route_ts["apps/web/src/app/api/auth/me/route.ts"]
+    apps_web_src_app_api_auth_supabase_token_route_ts["apps/web/src/app/api/auth/supabase-token/route.ts"]
+    apps_web_src_app_api_events_route_ts["apps/web/src/app/api/events/route.ts"]
+    apps_web_src_app_api_projects_route_ts["apps/web/src/app/api/projects/route.ts"]
+    apps_web_src_app_api_templates__id__customize_route_ts["apps/web/src/app/api/templates/[id]/customize/route.ts"]
+    apps_web_src_app_api_templates__id__deploy_route_ts["apps/web/src/app/api/templates/[id]/deploy/route.ts"]
+    apps_web_src_app_api_templates__id__route_ts["apps/web/src/app/api/templates/[id]/route.ts"]
+    apps_web_src_app_api_templates_route_ts["apps/web/src/app/api/templates/route.ts"]
+    apps_web_src_app_api_workflows__workflowId__deploy_route_ts["apps/web/src/app/api/workflows/[workflowId]/deploy/route.ts"]
+    apps_web_src_app_api_workflows_route_ts["apps/web/src/app/api/workflows/route.ts"]
+  end
+  subgraph FastApi["FastAPI Routes"]
+    apps_api_app_main_py["apps/api/app/main.py"]
+    apps_api_app_routes_ai_py["apps/api/app/routes/ai.py"]
+    apps_api_app_routes_applications_py["apps/api/app/routes/applications.py"]
+    apps_api_app_routes_architect_py["apps/api/app/routes/architect.py"]
+    apps_api_app_routes_auth_py["apps/api/app/routes/auth.py"]
+    apps_api_app_routes_events_py["apps/api/app/routes/events.py"]
+    apps_api_app_routes_projects_py["apps/api/app/routes/projects.py"]
+    apps_api_app_routes_templates_py["apps/api/app/routes/templates.py"]
+    apps_api_app_routes_workflows_py["apps/api/app/routes/workflows.py"]
+  end
+  subgraph Backend["Backend Services and Engines"]
+    apps_api_app_ai_provider_router_py["apps/api/app/ai/provider_router.py"]
+    apps_api_app_core_event_engine_py["apps/api/app/core/event_engine.py"]
+    apps_api_app_core_rbac_engine_py["apps/api/app/core/rbac_engine.py"]
+    apps_api_app_models___init___py["apps/api/app/models/__init__.py"]
+    apps_api_app_schemas___init___py["apps/api/app/schemas/__init__.py"]
+    apps_api_app_security_py["apps/api/app/security.py"]
+    apps_api_app_time_utils_py["apps/api/app/time_utils.py"]
+  end
+  apps_web_src_app__auth__login_page_tsx -->|"/api/auth/login"| apps_web_src_app_api_auth_login_route_ts
+  apps_web_src_app_api_auth_login_route_ts -->|"/api/auth/login"| apps_api_app_routes_auth_py
+  apps_api_app_routes_auth_py -->|"verify_password"| apps_api_app_security_py
+  apps_api_app_routes_auth_py -->|"create_access_token"| apps_api_app_security_py
+  apps_api_app_routes_auth_py -->|"create_refresh_token"| apps_api_app_security_py
+  apps_api_app_routes_auth_py -->|"TokenResponse"| apps_api_app_schemas___init___py
+  apps_web_src_app_console_architect_page_tsx -->|"/api/ai/compile"| apps_web_src_app_api_ai_compile_route_ts
+  apps_web_src_app_api_ai_compile_route_ts -->|"/api/ai/blueprints/compile"| apps_api_app_routes_ai_py
+  apps_api_app_routes_ai_py -->|"check_permission"| apps_api_app_core_rbac_engine_py
+  apps_api_app_routes_ai_py -->|"BlueprintProposal"| apps_api_app_models___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/auth/me"| apps_web_src_app_api_auth_me_route_ts
+  apps_web_src_app_api_auth_me_route_ts -->|"/api/auth/me"| apps_api_app_routes_auth_py
+  apps_web_src_lib_console_api_ts -->|"/api/projects"| apps_web_src_app_api_projects_route_ts
+  apps_web_src_app_api_projects_route_ts -->|"/api/projects"| apps_api_app_routes_projects_py
+  apps_api_app_routes_projects_py -->|"check_permission"| apps_api_app_core_rbac_engine_py
+  apps_api_app_routes_projects_py -->|"Project"| apps_api_app_models___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/workflows"| apps_web_src_app_api_workflows_route_ts
+  apps_web_src_app_api_workflows_route_ts -->|"/api/workflows"| apps_api_app_routes_workflows_py
+  apps_api_app_routes_workflows_py -->|"check_permission"| apps_api_app_core_rbac_engine_py
+  apps_api_app_routes_workflows_py -->|"Workflow"| apps_api_app_models___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/workflows/{workflowId}/deploy"| apps_web_src_app_api_workflows__workflowId__deploy_route_ts
+  apps_web_src_app_api_workflows__workflowId__deploy_route_ts -->|"/api/workflows/{workflow_id}/deploy"| apps_api_app_routes_workflows_py
+  apps_api_app_routes_workflows_py -->|"EventEngine"| apps_api_app_core_event_engine_py
+  apps_api_app_routes_workflows_py -->|"EventEngine.emit"| apps_api_app_core_event_engine_py
+  apps_web_src_lib_console_api_ts -->|"/api/applications"| apps_web_src_app_api_applications_route_ts
+  apps_web_src_app_api_applications_route_ts -->|"/api/applications"| apps_api_app_routes_applications_py
+  apps_api_app_routes_applications_py -->|"check_permission"| apps_api_app_core_rbac_engine_py
+  apps_web_src_lib_console_api_ts -->|"/api/events"| apps_web_src_app_api_events_route_ts
+  apps_web_src_app_api_events_route_ts -->|"/api/events"| apps_api_app_routes_events_py
+  apps_api_app_routes_events_py -->|"check_permission"| apps_api_app_core_rbac_engine_py
+  apps_web_src_lib_console_api_ts -->|"/api/ai/compile"| apps_web_src_app_api_ai_compile_route_ts
+  apps_web_src_lib_console_api_ts -->|"/api/ai/deploy/{proposalId}"| apps_web_src_app_api_ai_deploy__proposalId__route_ts
+  apps_web_src_app_api_ai_deploy__proposalId__route_ts -->|"/api/ai/blueprints/{proposal_id}/deploy"| apps_api_app_routes_ai_py
+  apps_api_app_routes_ai_py -->|"Workflow"| apps_api_app_models___init___py
+  apps_api_app_routes_ai_py -->|"utcnow_naive"| apps_api_app_time_utils_py
+  apps_api_app_routes_ai_py -->|"EventEngine"| apps_api_app_core_event_engine_py
+  apps_api_app_routes_ai_py -->|"EventEngine.emit"| apps_api_app_core_event_engine_py
+  apps_web_src_lib_console_api_ts -->|"/api/templates/{id}"| apps_web_src_app_api_templates__id__route_ts
+  apps_web_src_app_api_templates__id__route_ts -->|"/api/templates/{template_id}"| apps_api_app_routes_templates_py
+  apps_web_src_lib_console_api_ts -->|"/api/templates/{templateId}/deploy"| apps_web_src_app_api_templates__id__deploy_route_ts
+  apps_web_src_app_api_templates__id__deploy_route_ts -->|"/api/templates/{template_id}/deploy"| apps_api_app_routes_templates_py
+  apps_api_app_routes_templates_py -->|"check_permission"| apps_api_app_core_rbac_engine_py
+  apps_api_app_routes_templates_py -->|"Workflow"| apps_api_app_models___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/templates/{id}/customize"| apps_web_src_app_api_templates__id__customize_route_ts
+  apps_web_src_app_api_templates__id__customize_route_ts -->|"/api/templates/{template_id}/customize"| apps_api_app_routes_templates_py
+  apps_api_app_routes_templates_py -->|"TemplateCustomization"| apps_api_app_models___init___py
+  apps_api_app_routes_templates_py -->|"TemplateCustomizeResponse"| apps_api_app_schemas___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/architect"| apps_web_src_app_api_architect_route_ts
+  apps_web_src_app_api_architect_route_ts -->|"/api/architect"| apps_api_app_routes_architect_py
+  apps_api_app_routes_architect_py -->|"InstitutionArchitecture"| apps_api_app_models___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/architect/{archId}/prompt"| apps_web_src_app_api_architect__id__prompt_route_ts
+  apps_web_src_app_api_architect__id__prompt_route_ts -->|"/api/architect/{arch_id}/prompt"| apps_api_app_routes_architect_py
+  apps_api_app_routes_architect_py -->|"get_provider_router"| apps_api_app_ai_provider_router_py
+  apps_api_app_routes_architect_py -->|"utcnow_naive"| apps_api_app_time_utils_py
+  apps_api_app_routes_architect_py -->|"ArchitectureVersion"| apps_api_app_models___init___py
+  apps_web_src_lib_console_api_ts -->|"/api/architect/{archId}/link-workflow"| apps_web_src_app_api_architect__id__link_workflow_route_ts
+  apps_web_src_app_api_architect__id__link_workflow_route_ts -->|"/api/architect/{arch_id}/link-workflow"| apps_api_app_routes_architect_py
+  apps_web_src_lib_console_api_ts -->|"/api/architect/{archId}/available-workflows"| apps_web_src_app_api_architect__id__available_workflows_route_ts
+  apps_web_src_app_api_architect__id__available_workflows_route_ts -->|"/api/architect/{arch_id}/available-workflows"| apps_api_app_routes_architect_py
+  apps_web_src_lib_console_api_ts -->|"/api/architect/{archId}/versions"| apps_web_src_app_api_architect__id__versions_route_ts
+  apps_web_src_app_api_architect__id__versions_route_ts -->|"/api/architect/{arch_id}/versions"| apps_api_app_routes_architect_py
+  apps_web_src_lib_hooks_useEventStream_ts -->|"/api/events"| apps_web_src_app_api_events_route_ts

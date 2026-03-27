@@ -12,9 +12,16 @@ from app.models import BlueprintProposal, Workflow
 from app.schemas import BlueprintCompileRequest, BlueprintProposalResponse
 from app.security import get_current_user
 from app.tenant import get_tenant_context
+from app.time_utils import utcnow_naive
 
 router = APIRouter()
 _generator = BlueprintGenerator()
+
+try:
+    from app.ai.blueprint.context_builder import BlueprintContextBuilder
+    _context_builder = BlueprintContextBuilder()
+except ImportError:
+    _context_builder = None
 
 
 @router.post("/ai/blueprints/compile", response_model=BlueprintProposalResponse, status_code=201)
@@ -25,8 +32,17 @@ def compile_blueprint(
     tenant=Depends(get_tenant_context),
     _=Depends(check_permission("blueprint:compile")),
 ):
+    prompt = body.prompt
+    institution_context = body.institution_context
+
+    # Enrich prompt with project context if builder is available
+    if _context_builder is not None:
+        project_context = _context_builder.build(db, tenant.institution_id, tenant.project_id)
+        prompt = _context_builder.enrich_prompt(prompt, project_context)
+        institution_context = {**institution_context, **project_context}
+
     try:
-        raw_blueprint = _generator.compile(body.prompt, body.institution_context)
+        raw_blueprint = _generator.compile(prompt, institution_context)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"AI provider unavailable: {exc}") from exc
 
@@ -52,7 +68,7 @@ def compile_blueprint(
 
 
 @router.post("/ai/blueprints/{proposal_id}/deploy", status_code=201)
-def deploy_blueprint(
+async def deploy_blueprint(
     proposal_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -89,7 +105,6 @@ def deploy_blueprint(
     )
     version = (existing.version + 1) if existing else 1
 
-    from app.time_utils import utcnow_naive
     workflow = Workflow(
         institution_id=tenant.institution_id,
         project_id=tenant.project_id,
@@ -97,6 +112,7 @@ def deploy_blueprint(
         version=version,
         definition=workflow_def,
         is_ai_generated=True,
+        ai_prompt=proposal.prompt,
         deployed=True,
         created_by=current_user.id,
         deployed_at=utcnow_naive(),
@@ -104,22 +120,18 @@ def deploy_blueprint(
     db.add(workflow)
 
     proposal.status = "deployed"
-    from app.time_utils import utcnow_naive as _now
-    proposal.deployed_at = _now()
+    proposal.deployed_at = utcnow_naive()
     db.commit()
     db.refresh(workflow)
 
     # Emit event
     event_engine = EventEngine(db)
-    import asyncio
-    asyncio.create_task(
-        event_engine.emit(
-            "ai.blueprint.deployed",
-            tenant.institution_id,
-            tenant.project_id,
-            {"workflow_id": workflow.id, "workflow_name": workflow.name, "proposal_id": proposal_id},
-        )
-    ) if asyncio.get_event_loop().is_running() else None
+    await event_engine.emit(
+        "ai.blueprint.deployed",
+        tenant.institution_id,
+        tenant.project_id,
+        {"workflow_id": workflow.id, "workflow_name": workflow.name, "proposal_id": proposal_id},
+    )
 
     return {
         "workflow_id": workflow.id,

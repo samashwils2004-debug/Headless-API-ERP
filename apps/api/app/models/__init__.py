@@ -79,6 +79,7 @@ class Workflow(Base):
     version = Column(Integer, nullable=False)
     definition = Column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
     is_ai_generated = Column(Boolean, default=False, nullable=False)
+    ai_prompt = Column(Text, nullable=True)
     deployed = Column(Boolean, default=False, nullable=False)
     created_by = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=utcnow_naive, nullable=False)
@@ -173,7 +174,20 @@ class APIKey(Base):
     last_used_at = Column(DateTime)
     expires_at = Column(DateTime)
 
+    project_id = Column(
+        String, ForeignKey("projects.id"),
+        nullable=True, index=True,
+    )
+    architecture_version_id = Column(
+        String, ForeignKey("architecture_versions.id"),
+        nullable=True, index=True,
+    )
+    webhook_secret_hash = Column(String(64), nullable=True)
+    webhook_secret_prefix = Column(String(24), nullable=True)
+
     institution = relationship("Institution", backref="api_keys")
+    architecture_version = relationship("ArchitectureVersion", backref="api_key")
+    project = relationship("Project", backref="api_keys")
 
 
 class WorkflowTemplate(Base):
@@ -225,6 +239,35 @@ class ArchitectureVersion(Base):
     created_at = Column(DateTime, default=utcnow_naive, nullable=False)
 
     architecture = relationship("InstitutionArchitecture", backref="versions")
+
+
+class ArchWorkflow(Base):
+    """Junction: links an architecture version to its constituent workflows."""
+    __tablename__ = "arch_workflows"
+    __table_args__ = (
+        UniqueConstraint(
+            "architecture_version_id",
+            "workflow_id",
+            name="uq_arch_version_workflow",
+        ),
+        Index("ix_arch_workflows_version", "architecture_version_id"),
+    )
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    architecture_version_id = Column(
+        String, ForeignKey("architecture_versions.id"),
+        nullable=False, index=True,
+    )
+    workflow_id = Column(
+        String, ForeignKey("workflows.id"),
+        nullable=False, index=True,
+    )
+    workflow_version = Column(Integer, nullable=False)
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=utcnow_naive, nullable=False)
+
+    architecture_version = relationship("ArchitectureVersion", backref="linked_workflows")
+    workflow = relationship("Workflow")
 
 
 class TemplateCustomization(Base):

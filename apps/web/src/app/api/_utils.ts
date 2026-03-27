@@ -1,7 +1,79 @@
+import os from "node:os";
+
 import { NextRequest } from "next/server";
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/$/, "");
+}
+
+function firstExternalIpv4() {
+  type NetworkEntry = {
+    address: string;
+    family: string | number;
+    internal: boolean;
+  };
+  const networks = os.networkInterfaces();
+  for (const interfaceName of Object.keys(networks)) {
+    const entries = networks[interfaceName];
+    if (!entries) {
+      continue;
+    }
+
+    for (const entry of entries as NetworkEntry[]) {
+      const family = typeof entry.family === "string" ? entry.family : entry.family === 4 ? "IPv4" : "";
+      if (family === "IPv4" && !entry.internal) {
+        return entry.address;
+      }
+    }
+  }
+  return null;
+}
+
+export function backendBaseUrls() {
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  try {
+    const primary = new URL(raw);
+    if (primary.hostname === "localhost") {
+      primary.hostname = "127.0.0.1";
+    }
+
+    const bases = [trimTrailingSlash(primary.toString())];
+    if (primary.hostname === "127.0.0.1") {
+      const fallbackAddress = firstExternalIpv4();
+      if (fallbackAddress) {
+        const fallback = new URL(primary.toString());
+        fallback.hostname = fallbackAddress;
+        bases.push(trimTrailingSlash(fallback.toString()));
+      }
+    }
+
+    return Array.from(new Set(bases));
+  } catch {
+    return [trimTrailingSlash(raw)];
+  }
+}
+
 export function backendBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  return backendBaseUrls()[0];
+}
+
+export function backendUnavailableDetail(bases: string[], label = "Backend API") {
+  return `${label} unavailable at ${bases.join(" or ")}. Run \`npm run dev\` from the repo root to start both backend and frontend together.`;
+}
+
+export async function fetchBackend(path: string, init: RequestInit) {
+  const bases = backendBaseUrls();
+  let lastError: unknown;
+
+  for (const base of bases) {
+    try {
+      return { response: await fetch(`${base}${path}`, init), base, bases };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  return { response: null, base: null, bases, error: lastError };
 }
 
 export function authHeaderFromRequest(req: NextRequest) {
@@ -65,7 +137,6 @@ export async function proxyJson(
     }
   }
 
-  const base = backendBaseUrl();
   const headers: Record<string, string> = {
     ...authHeaderFromRequest(req),
     ...tenantHeadersFromRequest(req),
@@ -75,12 +146,17 @@ export async function proxyJson(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${base}${path}`, {
+  const result = await fetchBackend(path, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
+  if (!result.response) {
+    return { status: 503, body: { detail: backendUnavailableDetail(result.bases) } };
+  }
+
+  const res = result.response;
   const text = await res.text();
   try {
     const json = JSON.parse(text);

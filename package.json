@@ -7,7 +7,8 @@
     "packages/*"
   ],
   "scripts": {
-    "api:dev": "python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir apps/api",
+    "dev": "concurrently --names API,WEB --prefix-colors cyan,green \"npm run api:dev\" \"npm run web:dev\"",
+    "api:dev": "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir apps/api --reload",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
     "web:type-check": "npm --prefix apps/web run type-check",
@@ -16,5 +17,8 @@
   },
   "dependencies": {
     "psql": "^0.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

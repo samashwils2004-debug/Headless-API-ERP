@@ -66,6 +66,38 @@ class WorkflowEngine:
         definition = workflow.definition
         self._validate_definition(definition)
 
+        # Validate applicant data against embedded schema
+        schema = definition.get("schema")
+        if schema and schema.get("fields"):
+            validation_errors = []
+            for field_def in schema["fields"]:
+                field_name = field_def["name"]
+                field_type = field_def.get("type", "string")
+                required = field_def.get("required", False)
+                value = application.applicant_data.get(field_name)
+
+                if required and value is None:
+                    validation_errors.append(f"Missing required field: {field_name}")
+                    continue
+
+                if value is not None:
+                    if field_type == "number" and not isinstance(value, (int, float)):
+                        validation_errors.append(f"Field {field_name} must be a number")
+                    elif field_type == "string" and not isinstance(value, str):
+                        validation_errors.append(f"Field {field_name} must be a string")
+
+                    if field_def.get("min") is not None and isinstance(value, (int, float)):
+                        if value < field_def["min"]:
+                            validation_errors.append(f"Field {field_name} below minimum {field_def['min']}")
+                    if field_def.get("max") is not None and isinstance(value, (int, float)):
+                        if value > field_def["max"]:
+                            validation_errors.append(f"Field {field_name} above maximum {field_def['max']}")
+                    if field_def.get("enum") and value not in field_def["enum"]:
+                        validation_errors.append(f"Field {field_name} must be one of {field_def['enum']}")
+
+            if validation_errors:
+                raise WorkflowExecutionError(f"Application data validation failed: {validation_errors}")
+
         started = perf_counter()
         current = application.current_state
         if not current:

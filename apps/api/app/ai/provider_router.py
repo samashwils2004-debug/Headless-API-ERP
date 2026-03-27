@@ -34,12 +34,18 @@ def _mock_blueprint(prompt: str, context: dict) -> dict[str, Any]:
                 "under_review": {
                     "type": "intermediate",
                     "transitions": [
-                        {"to": "approved", "condition": "application_data.score >= 70", "emit_event": "application.reviewed"},
-                        {"to": "rejected", "condition": "application_data.score < 70", "emit_event": "application.reviewed"},
+                        {"to": "approved", "condition": "score >= 70", "emit_event": "application.reviewed"},
+                        {"to": "rejected", "condition": "score < 70", "emit_event": "application.reviewed"},
                     ],
                 },
                 "approved": {"type": "terminal", "transitions": []},
                 "rejected": {"type": "terminal", "transitions": []},
+            },
+            "schema": {
+                "fields": [
+                    {"name": "score", "type": "number", "required": True, "min": 0, "max": 100},
+                    {"name": "name", "type": "string", "required": True},
+                ]
             },
         },
         "roles": [
@@ -48,10 +54,10 @@ def _mock_blueprint(prompt: str, context: dict) -> dict[str, Any]:
             {"name": "admin", "permissions": ["application:*", "workflow:*"]},
         ],
         "events": [
-            {"name": "application.submitted", "version": "1.0"},
-            {"name": "application.reviewed", "version": "1.0"},
+            {"type": "application.submitted", "emit_on": "transition to under_review"},
+            {"type": "application.reviewed", "emit_on": "transition to approved"},
         ],
-        "compliance_tags": ["FERPA"] if institution_type == "university" else ["GDPR"],
+        "compliance_tags": ["ferpa"] if institution_type == "university" else ["gdpr"],
     }
 
 
@@ -79,7 +85,7 @@ class ProviderRouter:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=self.settings.gemini_api_key)
-                self._gemini_client = genai.GenerativeModel("gemini-1.5-flash")
+                self._gemini_client = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
                 logger.info("Gemini provider initialized")
             except Exception as e:
                 logger.warning("Gemini init failed: %s", e)
@@ -126,29 +132,40 @@ Generate a JSON blueprint for the given prompt. The blueprint MUST be valid JSON
           {"to": "<state>", "condition": "<expr or null>", "emit_event": "<event_name>"}
         ]
       }
+    },
+    "schema": {
+      "fields": [
+        {"name": "string", "type": "string|number|boolean", "required": true, "min": null, "max": null, "enum": null, "format": null}
+      ]
     }
   },
   "roles": [{"name": "string", "permissions": ["string"]}],
-  "events": [{"name": "string", "version": "1.0"}],
-  "compliance_tags": ["FERPA", "GDPR", "DPDP"]
+  "events": [{"type": "string", "emit_on": "string"}],
+  "compliance_tags": ["ferpa", "gdpr", "dpdp"]
 }
 Rules:
 - initial_state must exist in states
 - All transition targets must be valid state names
 - At least one terminal state must exist
 - No cycles in automatic transitions
+- Include a schema section with all fields referenced in conditions (use flat field names, not dotted paths)
+- compliance_tags must be lowercase
+- events must use "type" key (not "name")
+- If existing workflows are described in PROJECT CONTEXT, reuse their field names and role names
 - Return ONLY the JSON object, no markdown, no explanation"""
 
-    def _try_gemini(self, prompt: str, context: dict) -> dict | None:
+    def _try_gemini(self, prompt: str, context: dict, system_prompt: str | None = None) -> dict | None:
         if not self._gemini_client:
             return None
         try:
+            sys = system_prompt or self._build_system_prompt()
             user_content = json.dumps({"requirement": prompt, "institution_context": context})
             response = self._gemini_client.generate_content(
-                f"{self._build_system_prompt()}\n\nRequirement: {user_content}"
+                f"{sys}\n\nRequirement: {user_content}",
+                generation_config={"response_mime_type": "application/json", "temperature": 0.3},
             )
             text = response.text.strip()
-            # Strip markdown code blocks if present
+            # Strip markdown code blocks if present (defensive)
             if text.startswith("```"):
                 lines = text.split("\n")
                 text = "\n".join(lines[1:-1])
@@ -157,15 +174,16 @@ Rules:
             logger.warning("Gemini provider failed: %s", e)
             return None
 
-    def _try_groq(self, prompt: str, context: dict) -> dict | None:
+    def _try_groq(self, prompt: str, context: dict, system_prompt: str | None = None) -> dict | None:
         if not self._groq_client:
             return None
         try:
+            sys = system_prompt or self._build_system_prompt()
             user_content = json.dumps({"requirement": prompt, "institution_context": context})
             response = self._groq_client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
-                    {"role": "system", "content": self._build_system_prompt()},
+                    {"role": "system", "content": sys},
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.1,
@@ -178,7 +196,12 @@ Rules:
             logger.warning("Groq provider failed: %s", e)
             return None
 
-    def generate(self, prompt: str, institution_context: dict[str, Any]) -> dict[str, Any]:
+    def generate(
+        self,
+        prompt: str,
+        institution_context: dict[str, Any],
+        system_prompt: str | None = None,
+    ) -> dict[str, Any]:
         """
         Generate a blueprint using the provider cascade.
         Returns: {result, provider_used, is_mock, cached}
@@ -195,11 +218,11 @@ Rules:
         result = None
         provider_used = "mock"
 
-        result = self._try_gemini(prompt, institution_context)
+        result = self._try_gemini(prompt, institution_context, system_prompt)
         if result:
-            provider_used = "gemini-1.5-flash"
+            provider_used = "gemini-2.5-flash"
         else:
-            result = self._try_groq(prompt, institution_context)
+            result = self._try_groq(prompt, institution_context, system_prompt)
             if result:
                 provider_used = "groq-llama-3.1"
 
