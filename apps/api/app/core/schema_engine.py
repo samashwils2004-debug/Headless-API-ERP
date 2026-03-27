@@ -37,6 +37,27 @@ BLUEPRINT_SCHEMA = {
                 "name": {"type": "string"},
                 "initial_state": {"type": "string"},
                 "states": {"type": "object", "minProperties": 2},
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "fields": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["name", "type"],
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "type": {"type": "string", "enum": ["string", "number", "boolean"]},
+                                    "required": {"type": "boolean"},
+                                    "min": {"type": "number"},
+                                    "max": {"type": "number"},
+                                    "enum": {"type": "array", "items": {"type": "string"}},
+                                    "format": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
             },
         },
         "roles": {

@@ -1,4 +1,7 @@
 "use client";
+// when a user submits their credentials, this fires a request to api/auth/login
+// talks to the next API bridge for login @web/src/app/api/auth/login/route.ts/
+// and then uses the next-auth session to authenticate the user
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";

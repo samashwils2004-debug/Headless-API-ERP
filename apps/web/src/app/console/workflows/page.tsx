@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Sparkles,
   Plus,
@@ -8,14 +9,17 @@ import {
   ChevronRight,
   GitBranch,
   CheckCircle2,
+  Network,
   XCircle,
   AlertCircle,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 import {
   compileBlueprint,
   createWorkflow,
+  deleteWorkflow,
   deployBlueprint,
   deployWorkflow,
   listWorkflows,
@@ -23,6 +27,8 @@ import {
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
+import { COMPLIANCE_OPTIONS } from "@/lib/constants";
+import { toast } from "sonner";
 
 // ── SVG State Machine Graph ────────────────────────────────────────────────
 
@@ -182,7 +188,7 @@ function RBACTable({ definition }: { definition: Record<string, unknown> }) {
   );
 }
 
-const COMPLIANCE_OPTIONS = ["FERPA", "GDPR", "HIPAA", "SOC2", "ISO27001", "PCI-DSS"];
+// COMPLIANCE_OPTIONS imported from @/lib/constants
 const INSTITUTION_TYPES = ["University", "Community College", "K-12 School District", "Healthcare System", "Government Agency", "Non-profit"];
 const DEPARTMENTS = ["Admissions", "Financial Aid", "Human Resources", "Finance & Accounting", "Student Affairs", "Research & Grants", "IT & Operations"];
 
@@ -190,6 +196,7 @@ type PreviewTab = "overview" | "graph" | "json" | "validation" | "rbac";
 type CreationTab = "ai" | "scratch";
 
 export default function WorkflowsPage() {
+  const router = useRouter();
   const context = useProjectContextStore((s) => s.context);
   const workflows = useWorkflowStore((s) => s.workflows);
   const setWorkflows = useWorkflowStore((s) => s.setWorkflows);
@@ -214,16 +221,31 @@ export default function WorkflowsPage() {
   const [deploying, setDeploying] = useState(false);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
+  const noProject = !context.institutionId || !context.projectId;
 
   useEffect(() => {
     if (!context.institutionId || !context.projectId) return;
     listWorkflows(tenant).then((d) => setWorkflows(d.workflows)).catch(() => {});
   }, [context.institutionId, context.projectId]);
 
-  const handleDeploy = async (id: string) => {
-    await deployWorkflow(tenant, id);
+  const refreshWorkflows = async () => {
     const d = await listWorkflows(tenant);
     setWorkflows(d.workflows);
+  };
+
+  const handleDeploy = async (id: string) => {
+    await deployWorkflow(tenant, id);
+    await refreshWorkflows();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this draft workflow? This cannot be undone.")) return;
+    try {
+      await deleteWorkflow(tenant, id);
+      await refreshWorkflows();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
   };
 
   const handleGenerate = async () => {
@@ -247,8 +269,7 @@ export default function WorkflowsPage() {
     setDeploying(true);
     try {
       await deployBlueprint(tenant, blueprint.id);
-      const d = await listWorkflows(tenant);
-      setWorkflows(d.workflows);
+      await refreshWorkflows();
       setPanelOpen(false);
       setBlueprint(null);
       setPrompt("");
@@ -268,8 +289,7 @@ export default function WorkflowsPage() {
     try {
       const wf = await createWorkflow(tenant, { name: scratchName, definition: def, is_ai_generated: false });
       await deployWorkflow(tenant, wf.id);
-      const d = await listWorkflows(tenant);
-      setWorkflows(d.workflows);
+      await refreshWorkflows();
       setPanelOpen(false);
     } catch (e: unknown) {
       setScratchError(e instanceof Error ? e.message : "Failed");
@@ -285,19 +305,50 @@ export default function WorkflowsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Project guard */}
+      {noProject && (
+        <div className="rounded-lg border px-5 py-4 flex items-start gap-3" style={{ background: "#1a0f00", borderColor: "#3a2500", color: "#fbbf24" }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">
+              {context.projectId ? "Project not found" : "No project selected"}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "#a16207" }}>
+              {context.projectId
+                ? "The selected project no longer exists."
+                : "Go to Projects and select or create a project before building workflows."}
+            </p>
+            <a href="/console/projects" className="text-xs mt-1 inline-block underline" style={{ color: "#fbbf24" }}>
+              Go to Projects →
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold" style={{ color: "#f4f4f5" }}>Workflows</h2>
           <p className="text-sm mt-0.5" style={{ color: "#71717a" }}>State-machine definitions powering your processes</p>
         </div>
-        <button
-          onClick={() => { setPanelOpen(true); setBlueprint(null); setGenError(null); }}
-          className="flex items-center gap-2 px-4 py-2 rounded text-sm font-medium"
-          style={{ background: "#3b82f6", color: "#fff" }}
-        >
-          <Plus size={14} /> New Workflow
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setPanelOpen(true); setBlueprint(null); setGenError(null); }}
+            disabled={noProject}
+            className={`flex items-center gap-2 px-3 py-2 rounded text-sm${noProject ? " opacity-40 cursor-not-allowed" : ""}`}
+            style={{ background: "#1b1b24", border: "1px solid #25252b", color: "#a1a1aa" }}
+          >
+            <Plus size={14} /> Quick Create
+          </button>
+          <button
+            onClick={() => router.push("/console/workflows/new")}
+            disabled={noProject}
+            className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-medium${noProject ? " opacity-40 cursor-not-allowed" : ""}`}
+            style={{ background: "#3b82f6", color: "#fff" }}
+          >
+            <Network size={14} /> Canvas Builder
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -338,9 +389,21 @@ export default function WorkflowsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  {!wf.deployed && (
-                    <button onClick={() => handleDeploy(wf.id)} className="text-xs hover:underline" style={{ color: "#86efac" }}>Deploy</button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {!wf.deployed && (
+                      <>
+                        <button onClick={() => handleDeploy(wf.id)} className="text-xs hover:underline" style={{ color: "#86efac" }}>Deploy</button>
+                        <button onClick={() => handleDelete(wf.id)} className="text-xs hover:underline flex items-center gap-1" style={{ color: "#f87171" }}>
+                          <Trash2 size={11} /> Delete
+                        </button>
+                      </>
+                    )}
+                    {wf.deployed && (
+                      <a href="/console/architect" className="text-xs hover:underline flex items-center gap-1" style={{ color: "#60a5fa" }}>
+                        → Architect
+                      </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

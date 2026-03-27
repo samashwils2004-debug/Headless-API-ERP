@@ -26,6 +26,7 @@ import {
   type ArchitectureVersionItem,
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
+import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
@@ -77,6 +78,7 @@ export default function ArchitectPage() {
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [selectedWorkflowIds, setSelectedWorkflowIds] = useState<string[]>([]);
   const [keyName, setKeyName] = useState("Default API Key");
+  const [complianceTags, setComplianceTags] = useState<string[]>([]);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -109,7 +111,10 @@ export default function ArchitectPage() {
     if (!prompt.trim() || !arch) return;
     setApplying(true);
     try {
-      const res = await applyArchitectPrompt(tenant, arch.id, prompt);
+      const finalPrompt = complianceTags.length > 0
+        ? `${prompt} [Compliance: ${complianceTags.join(", ")}]`
+        : prompt;
+      const res = await applyArchitectPrompt(tenant, arch.id, finalPrompt);
 
       if (res.type === "redirect") {
         toast.info(res.message || "Redirecting to workflow builder");
@@ -245,6 +250,27 @@ export default function ArchitectPage() {
                 ✓ {lastDiff}
               </p>
             )}
+            {/* Compliance context */}
+            <div className="mt-3">
+              <p className="text-xs mb-1.5" style={{ color: "#52525b" }}>Compliance context (optional)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {COMPLIANCE_OPTIONS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setComplianceTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
+                    className="px-1.5 py-0.5 rounded text-[10px] border transition-colors"
+                    style={
+                      complianceTags.includes(tag)
+                        ? { background: "#1e3a5f", borderColor: "#3b82f6", color: "#60a5fa" }
+                        : { background: "transparent", borderColor: "#25252b", color: "#52525b" }
+                    }
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Domain Graph */}
@@ -370,7 +396,12 @@ export default function ArchitectPage() {
                 </label>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {availableWorkflows.length === 0 ? (
-                    <p className="text-xs py-2" style={{ color: "#52525b" }}>No deployed workflows</p>
+                    <div className="py-3 text-center">
+                      <p className="text-xs mb-2" style={{ color: "#52525b" }}>No deployed workflows yet</p>
+                      <a href="/console/workflows" className="text-xs underline" style={{ color: "#3b82f6" }}>
+                        Build & deploy a workflow first →
+                      </a>
+                    </div>
                   ) : (
                     availableWorkflows.map((wf) => (
                       <label key={wf.id} className="flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-[#1b1b24]">
@@ -384,8 +415,9 @@ export default function ArchitectPage() {
                           }
                           className="rounded"
                         />
-                        <span className="text-xs truncate" style={{ color: "#a1a1aa" }}>{wf.name}</span>
-                        <span className="ml-auto text-[10px]" style={{ color: "#52525b" }}>v{wf.version}</span>
+                        <GitBranch size={10} style={{ color: "#3b82f6", flexShrink: 0 }} />
+                        <span className="text-xs truncate flex-1" style={{ color: "#a1a1aa" }}>{wf.name}</span>
+                        <span className="text-[10px] px-1 py-0.5 rounded shrink-0" style={{ background: "#0a1a0a", color: "#4ade80" }}>v{wf.version} ✓</span>
                       </label>
                     ))
                   )}
@@ -470,6 +502,36 @@ export default function ArchitectPage() {
                     </div>
                   ))
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Deployed Workflows panel */}
+          <div className="rounded-lg border p-4" style={cardStyle}>
+            <div className="flex items-center gap-2 mb-3">
+              <GitBranch size={14} style={{ color: "#3b82f6" }} />
+              <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Deployed Workflows</h3>
+              <span className="ml-auto text-xs" style={{ color: "#52525b" }}>{availableWorkflows.length}</span>
+            </div>
+            {availableWorkflows.length === 0 ? (
+              <div className="text-center py-3">
+                <p className="text-xs mb-2" style={{ color: "#52525b" }}>No deployed workflows</p>
+                <a href="/console/workflows/new" className="text-xs underline" style={{ color: "#3b82f6" }}>
+                  Build a workflow →
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {availableWorkflows.map((wf) => (
+                  <div key={wf.id} className="flex items-center gap-2 rounded px-2 py-1.5" style={{ background: "#1b1b24" }}>
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#4ade80" }} />
+                    <span className="text-xs flex-1 truncate" style={{ color: "#a1a1aa" }}>{wf.name}</span>
+                    <span className="text-[10px]" style={{ color: "#52525b" }}>v{wf.version}</span>
+                    {wf.is_ai_generated && (
+                      <span className="text-[10px] px-1 rounded" style={{ background: "#1e1030", color: "#c084fc" }}>AI</span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

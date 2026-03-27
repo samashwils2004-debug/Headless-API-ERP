@@ -89,6 +89,24 @@ async def deploy_workflow(
     if workflow.deployed:
         return workflow
 
+    # Prevent duplicate deployed names
+    already_deployed = (
+        db.query(Workflow)
+        .filter(
+            Workflow.institution_id == tenant.institution_id,
+            Workflow.project_id == tenant.project_id,
+            Workflow.name == workflow.name,
+            Workflow.deployed == True,
+            Workflow.id != workflow_id,
+        )
+        .first()
+    )
+    if already_deployed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A deployed workflow named '{workflow.name}' already exists (v{already_deployed.version}). Use a different name.",
+        )
+
     workflow.deployed = True
     workflow.deployed_at = datetime.utcnow()
     db.commit()
@@ -133,3 +151,26 @@ def update_workflow(
     db.refresh(workflow)
     return workflow
 
+
+@router.delete("/workflows/{workflow_id}", status_code=204)
+def delete_workflow(
+    workflow_id: str,
+    tenant: TenantContext = Depends(get_tenant_context),
+    user=Depends(check_permission("workflow:write")),
+    db: Session = Depends(get_db),
+):
+    workflow = (
+        db.query(Workflow)
+        .filter(
+            Workflow.id == workflow_id,
+            Workflow.institution_id == tenant.institution_id,
+            Workflow.project_id == tenant.project_id,
+        )
+        .first()
+    )
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if workflow.deployed:
+        raise HTTPException(status_code=409, detail="Deployed workflows cannot be deleted")
+    db.delete(workflow)
+    db.commit()

@@ -1,5 +1,5 @@
 ﻿import Link from "next/link";
-import { Book, ShieldCheck, Code2, Home } from "lucide-react";
+import { Book, ShieldCheck, Code2, Home, GitBranch, Building2 } from "lucide-react";
 import { AnnouncementBar } from "@/components/landing/AnnouncementBar";
 import { LandingNav } from "@/components/landing/LandingNav";
 import { LandingFooter } from "@/components/landing/LandingFooter";
@@ -25,7 +25,20 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               <Code2 size={16} /> API Reference
             </Link>
 
-            <div className="pt-8 mt-8 border-t border-[var(--border-default)]">
+            {/* Manual section */}
+            <div className="pt-5 mt-5 border-t border-[var(--border-default)]">
+              <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-600">
+                Manual
+              </p>
+              <Link href="/docs/manual/workflow-builder" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[#1e1e24] rounded-md transition-colors">
+                <GitBranch size={16} /> Building Workflows
+              </Link>
+              <Link href="/docs/manual/architect" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[#1e1e24] rounded-md transition-colors">
+                <Building2 size={16} /> Using the Architect
+              </Link>
+            </div>
+
+            <div className="pt-5 mt-5 border-t border-[var(--border-default)]">
               <Link href="/" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-[#1e1e24] rounded-md transition-colors">
                 <Home size={16} /> Back to Hub
               </Link>

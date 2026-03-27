@@ -145,6 +145,15 @@ export async function deployWorkflow(tenant: TenantContext, workflowId: string) 
   return parse<WorkflowItem>(response);
 }
 
+export async function deleteWorkflow(tenant: TenantContext, workflowId: string) {
+  const response = await fetch(`/api/workflows/${workflowId}`, {
+    method: "DELETE",
+    headers: headersForTenant(tenant),
+  });
+  if (response.status === 204) return;
+  return parse<void>(response);
+}
+
 export async function listApplications(tenant: TenantContext) {
   const response = await fetch("/api/applications", {
     cache: "no-store",
