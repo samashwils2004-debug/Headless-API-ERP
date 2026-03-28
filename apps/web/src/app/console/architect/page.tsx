@@ -1,3 +1,7 @@
+// calls /api/ai/compile to generate blueprints, etc
+// calls getCsrfToken() manually from the cookie for ts direct fetch calls
+// connects to /api/ai/compile (same endpoint as console-api.ts)
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -13,6 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   Key,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -512,6 +517,9 @@ export default function ArchitectPage() {
               <GitBranch size={14} style={{ color: "#3b82f6" }} />
               <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Deployed Workflows</h3>
               <span className="ml-auto text-xs" style={{ color: "#52525b" }}>{availableWorkflows.length}</span>
+              <button onClick={loadArch} title="Refresh" className="opacity-50 hover:opacity-100 transition-opacity">
+                <RefreshCw size={12} style={{ color: "#71717a" }} />
+              </button>
             </div>
             {availableWorkflows.length === 0 ? (
               <div className="text-center py-3">

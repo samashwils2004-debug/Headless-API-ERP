@@ -54,8 +54,8 @@ def _mock_blueprint(prompt: str, context: dict) -> dict[str, Any]:
             {"name": "admin", "permissions": ["application:*", "workflow:*"]},
         ],
         "events": [
-            {"type": "application.submitted", "emit_on": "transition to under_review"},
-            {"type": "application.reviewed", "emit_on": "transition to approved"},
+            {"type": "application.submitted", "version": "1.0"},
+            {"type": "application.reviewed", "version": "1.0"},
         ],
         "compliance_tags": ["ferpa"] if institution_type == "university" else ["gdpr"],
     }
@@ -140,7 +140,7 @@ Generate a JSON blueprint for the given prompt. The blueprint MUST be valid JSON
     }
   },
   "roles": [{"name": "string", "permissions": ["string"]}],
-  "events": [{"type": "string", "emit_on": "string"}],
+  "events": [{"type": "string", "version": "1.0"}],
   "compliance_tags": ["ferpa", "gdpr", "dpdp"]
 }
 Rules:
@@ -240,6 +240,32 @@ Rules:
 
         return response
 
+    def reinit_if_stale(self) -> None:
+        """Re-read settings and reinitialize providers if new keys are available."""
+        from app.config import get_settings
+        get_settings.cache_clear()
+        fresh = get_settings()
+        changed = False
+        if fresh.groq_api_key and not self._groq_client:
+            try:
+                from groq import Groq
+                self._groq_client = Groq(api_key=fresh.groq_api_key)
+                logger.info("Groq provider initialized (late-load from updated .env)")
+                changed = True
+            except Exception as e:
+                logger.warning("Groq late-init failed: %s", e)
+        if fresh.gemini_api_key and not self._gemini_client:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=fresh.gemini_api_key)
+                self._gemini_client = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
+                logger.info("Gemini provider initialized (late-load from updated .env)")
+                changed = True
+            except Exception as e:
+                logger.warning("Gemini late-init failed: %s", e)
+        if changed:
+            self.settings = fresh
+
 
 # Module-level singleton
 _router: ProviderRouter | None = None
@@ -249,4 +275,6 @@ def get_provider_router() -> ProviderRouter:
     global _router
     if _router is None:
         _router = ProviderRouter()
+    else:
+        _router.reinit_if_stale()
     return _router

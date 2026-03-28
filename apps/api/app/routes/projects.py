@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.core.rbac_engine import check_permission
-from app.models import Project
+from app.models import Project, Workflow
 from app.schemas import ProjectCreate, ProjectResponse
 from app.tenant import TenantContext, get_tenant_context
 
@@ -42,4 +42,32 @@ def create_project(
     db.commit()
     db.refresh(project)
     return project
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+def delete_project(
+    project_id: str,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _=Depends(check_permission("project:write")),
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.institution_id == tenant.institution_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    has_workflows = db.query(Workflow).filter(
+        Workflow.project_id == project_id,
+        Workflow.deployed == True,  # noqa: E712
+    ).first()
+    if has_workflows:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete a project with deployed workflows. Undeploy or delete all workflows first.",
+        )
+
+    db.delete(project)
+    db.commit()
 

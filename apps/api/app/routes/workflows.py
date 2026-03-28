@@ -112,13 +112,16 @@ async def deploy_workflow(
     db.commit()
     db.refresh(workflow)
 
-    event_engine = EventEngine(db)
-    await event_engine.emit(
-        "workflow.deployed",
-        institution_id=tenant.institution_id,
-        project_id=tenant.project_id,
-        data={"workflow_id": workflow.id, "workflow_name": workflow.name, "version": workflow.version},
-    )
+    try:
+        event_engine = EventEngine(db)
+        await event_engine.emit(
+            "workflow.deployed",
+            institution_id=tenant.institution_id,
+            project_id=tenant.project_id,
+            data={"workflow_id": workflow.id, "workflow_name": workflow.name, "version": workflow.version},
+        )
+    except Exception:
+        pass  # Event failure must not block deploy response
     return workflow
 
 

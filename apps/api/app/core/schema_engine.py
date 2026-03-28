@@ -75,7 +75,7 @@ BLUEPRINT_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["type", "version"],
+                "required": ["type"],
                 "properties": {
                     "type": {"type": "string"},
                     "version": {"type": "string"},

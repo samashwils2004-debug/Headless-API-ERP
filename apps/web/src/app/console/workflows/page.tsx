@@ -33,8 +33,9 @@ import { toast } from "sonner";
 // ── SVG State Machine Graph ────────────────────────────────────────────────
 
 function WorkflowGraphSVG({ definition }: { definition: Record<string, unknown> }) {
-  const mainWf = (definition?.workflows as Record<string, unknown>)
-    ?.main as Record<string, unknown> | undefined;
+  // AI blueprints use `workflow.states`; scratch format uses `workflows.main.states`
+  const mainWf = ((definition?.workflow as Record<string, unknown>) ??
+    (definition?.workflows as Record<string, unknown>)?.main) as Record<string, unknown> | undefined;
   if (!mainWf)
     return <p className="text-center text-[#52525b] text-sm py-8">No graph data</p>;
 
@@ -149,7 +150,7 @@ function ValidationBadge({ label, passed, errors }: { label: string; passed: boo
         {passed ? <CheckCircle2 size={14} style={{ color: "#16a34a" }} /> : <XCircle size={14} style={{ color: "#ef4444" }} />}
         <span className="text-xs font-medium" style={{ color: passed ? "#86efac" : "#fca5a5" }}>{label}</span>
       </div>
-      {!passed && errors.slice(0, 3).map((e, i) => (
+      {!passed && (errors ?? []).slice(0, 3).map((e, i) => (
         <p key={i} className="text-[11px] mt-0.5" style={{ color: "#ef4444" }}>• {e}</p>
       ))}
     </div>
@@ -299,8 +300,9 @@ export default function WorkflowsPage() {
   };
 
   const blueprintDef = blueprint?.blueprint as Record<string, unknown> | null;
-  const validation = blueprint?.validation_result as Record<string, { passed: boolean; errors: string[] }> | null;
-  const validPassed = validation ? Object.entries(validation).filter(([k]) => k !== "all_passed").every(([, v]) => v.passed) : true;
+  // Backend returns { valid, errors } per stage; top-level key is is_valid (not all_passed)
+  const validation = blueprint?.validation_result as Record<string, { valid: boolean; errors: string[] }> | null;
+  const validPassed = validation ? Object.entries(validation).filter(([k]) => k !== "is_valid").every(([, v]) => v.valid) : true;
   const toggleTag = (t: string) => setTags((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
 
   return (
@@ -530,7 +532,7 @@ export default function WorkflowsPage() {
                       <div className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
                         <div className="text-xs font-medium mb-2" style={{ color: "#71717a" }}>States</div>
                         <div className="flex flex-wrap gap-1.5">
-                          {Object.keys(((blueprintDef.workflows as Record<string, unknown>)?.main as Record<string, unknown>)?.states as Record<string, unknown> || {}).map((s) => (
+                          {Object.keys(((blueprintDef.workflow as Record<string, unknown>)?.states ?? ((blueprintDef.workflows as Record<string, unknown>)?.main as Record<string, unknown>)?.states ?? {}) as Record<string, unknown>).map((s) => (
                             <span key={s} className="text-[11px] px-1.5 py-0.5 rounded"
                               style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>{s}</span>
                           ))}
@@ -555,8 +557,8 @@ export default function WorkflowsPage() {
                   {previewTab === "validation" && validation && (
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(validation).map(([key, val]) =>
-                        key === "all_passed" ? null : (
-                          <ValidationBadge key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} passed={val.passed} errors={val.errors} />
+                        key === "is_valid" ? null : (
+                          <ValidationBadge key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} passed={val.valid} errors={val.errors ?? []} />
                         )
                       )}
                     </div>

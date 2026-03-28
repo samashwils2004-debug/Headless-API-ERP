@@ -12,9 +12,11 @@ import {
   FlaskConical,
   Rocket,
   X,
+  Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 
-import { createProject, listProjects } from "@/lib/console-api";
+import { createProject, deleteProject, listProjects } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useProjectStore, type ProjectItem } from "@/lib/stores/project-store";
 
@@ -31,11 +33,36 @@ export default function ProjectsPage() {
   const [environment, setEnvironment] = useState<"test" | "production">("test");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Auto-derive slug from name
   useEffect(() => {
     setSlug(name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
   }, [name]);
+
+  const handleDelete = async (project: ProjectItem) => {
+    if (!confirm(`Delete project "${project.name}"? This cannot be undone.`)) return;
+    setDeletingId(project.id);
+    try {
+      await deleteProject(
+        { institutionId: project.institution_id, projectId: project.id },
+        project.id,
+      );
+      const refreshed = await listProjects({
+        institutionId: project.institution_id,
+        projectId: project.id,
+      });
+      setProjects(refreshed.projects);
+      if (context.projectId === project.id) {
+        setContext({ institutionId: project.institution_id, projectId: "", projectName: "", environment: "test" });
+      }
+      toast.success(`Project "${project.name}" deleted`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const selectProject = (project: ProjectItem) => {
     setContext({
@@ -225,7 +252,7 @@ export default function ProjectsPage() {
                 </div>
 
                 {/* Action */}
-                <div className="shrink-0 flex items-center gap-3">
+                <div className="shrink-0 flex items-center gap-2">
                   {isSelected ? (
                     <button
                       onClick={() => router.push("/console/workflows")}
@@ -243,6 +270,17 @@ export default function ProjectsPage() {
                       Select <ChevronRight size={12} />
                     </button>
                   )}
+                  <button
+                    onClick={() => handleDelete(project)}
+                    disabled={deletingId === project.id}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded text-xs transition-colors disabled:opacity-40"
+                    style={{ color: "#71717a", border: "1px solid #25252b" }}
+                    title="Delete project"
+                  >
+                    {deletingId === project.id
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : <Trash2 size={11} />}
+                  </button>
                 </div>
               </div>
             );

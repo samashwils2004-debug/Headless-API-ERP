@@ -490,19 +490,22 @@ async def compile_architecture(
     db.commit()
     db.refresh(arch_version)
 
-    # Emit event
-    event_engine = EventEngine(db)
-    await event_engine.emit(
-        "architecture.compiled",
-        tenant.institution_id,
-        tenant.project_id,
-        {
-            "architecture_version_id": arch_version.id,
-            "version_number": version_number,
-            "workflows_linked": len(workflows),
-            "key_prefix": key_data["key_prefix"],
-        },
-    )
+    # Emit event — failure must never block compile response
+    try:
+        event_engine = EventEngine(db)
+        await event_engine.emit(
+            "architecture.compiled",
+            tenant.institution_id,
+            tenant.project_id,
+            {
+                "architecture_version_id": arch_version.id,
+                "version_number": version_number,
+                "workflows_linked": len(workflows),
+                "key_prefix": key_data["key_prefix"],
+            },
+        )
+    except Exception as _emit_err:
+        logger.warning("Event emission failed during compile (non-fatal): %s", _emit_err)
 
     return CompileResponse(
         architecture_version_id=arch_version.id,

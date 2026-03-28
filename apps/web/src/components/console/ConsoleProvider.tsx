@@ -31,20 +31,22 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         const user = await getCurrentUser();
         setUser(user);
 
-        // Always use the real user's institution_id — never trust stale localStorage context
-        // which could be from a previous session with a different account/institution.
-        const isSameInstitution = context.institutionId === user.institution_id;
         const bootstrapTenant: TenantContext = {
           institutionId: user.institution_id,
-          projectId: isSameInstitution ? (context.projectId || "bootstrap") : "bootstrap",
+          projectId: context.projectId || "bootstrap",
         };
 
         const projectsPayload = await listProjects(bootstrapTenant);
         setProjects(projectsPayload.projects);
 
+        // Prefer the explicitly-selected project from a previous session.
+        // Only auto-select the first project if the user has never selected one.
+        const matchedProject = context.projectId
+          ? projectsPayload.projects.find((p) => p.id === context.projectId)
+          : null;
         const activeProject =
-          projectsPayload.projects.find((project) => project.id === context.projectId) ||
-          projectsPayload.projects[0] ||
+          matchedProject ||
+          (context.projectId ? null : projectsPayload.projects[0] ?? null) ||
           null;
 
         if (activeProject) {
@@ -72,7 +74,8 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     };
 
     bootstrap();
-  }, [context.institutionId, context.projectId, setContext, setProjects, setUser, setWorkflows]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty: bootstrap runs ONCE per mount. Project switching must not re-trigger it.
 
   useEffect(() => {
     setWorkflows([]);

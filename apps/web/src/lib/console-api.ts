@@ -1,3 +1,20 @@
+// the central "API client" for the entire frontend, something like a phonebook of all backend calls
+// functions like: getProjects(), listWorkflows(), listEvents()
+// ever console page that needs data calls a function from here
+// it talks to: 8 different Next API bridge routes:
+// /api/projects - list, create, update, delete projects
+// /api/workflows - list, create, update, delete workflows
+// /api/applications - list, create, update, delete applications
+// /api/events - list of historical events
+// /api/ai/compile - compile blueprint
+// /api/ai/deploy - deploy blueprint
+// /api/ai/templates - list, create, update, delete templates
+// /api/ai/templates/:id/customize - customize template
+// /api/ai/templates/:id/deploy - deploy template
+// /api/auth/me - get current user
+// every function calls assertTenantContext(tenant) first checking if institutionID and projectID exists
+// and then sends them in the headers as X-Institution-Id and X-Project-Id (attaching CSRF token from the cookie)
+
 import { assertTenantContext } from "@/lib/enforcement/tenantGuard";
 import type { DomainEvent, InstitutionalBlueprint, ValidationResult, WorkflowDefinition } from "@/types/contracts";
 
@@ -115,6 +132,15 @@ export async function createProject(tenant: TenantContext, payload: { name: stri
     body: JSON.stringify(payload),
   });
   return parse<{ id: string }>(response);
+}
+
+export async function deleteProject(tenant: TenantContext, projectId: string) {
+  const response = await fetch(`/api/projects/${projectId}`, {
+    method: "DELETE",
+    headers: headersForTenant(tenant),
+  });
+  if (response.status === 204) return;
+  return parse<void>(response);
 }
 
 export async function listWorkflows(tenant: TenantContext) {

@@ -25,6 +25,8 @@ DEFAULT_PERMISSIONS: dict[str, set[str]] = {
         "api_key:write",
         "template:read",
         "template:deploy",
+        "architect:read",
+        "architect:write",
     },
     "reviewer": {
         "project:read",
@@ -34,6 +36,7 @@ DEFAULT_PERMISSIONS: dict[str, set[str]] = {
         "event:read",
         "blueprint:compile",
         "template:read",
+        "architect:read",
     },
     "viewer": {
         "project:read",
@@ -41,6 +44,7 @@ DEFAULT_PERMISSIONS: dict[str, set[str]] = {
         "application:read",
         "event:read",
         "template:read",
+        "architect:read",
     },
 }
 
