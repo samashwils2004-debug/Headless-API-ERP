@@ -272,7 +272,7 @@ export default function AIGeneratorPage() {
       {blueprint && (
         <div className="space-y-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4">
           <div className="flex flex-wrap border-b border-[var(--border-default)]">
-            {(["overview", "graph", "json", "validation", "roles"] as Tab[]).map((entry) => (
+            {(["overview", "graph", "json", "validation", "roles", "schema"] as Tab[]).map((entry) => (
               <button
                 key={entry}
                 onClick={() => setTab(entry)}

@@ -1,4 +1,4 @@
-"""Provider router — cascades through Gemini → Groq → Mock with Redis caching."""
+"""Provider router — cascades through Claude → Gemini → Groq → Mock with Redis caching."""
 from __future__ import annotations
 
 import hashlib
@@ -244,17 +244,21 @@ Rules:
             logger.info("AI response served from cache")
             return {"result": cached["result"], "provider_used": cached["provider_used"], "is_mock": False, "cached": True}
 
-        # Provider cascade
+        # Provider cascade: Claude → Gemini → Groq → Mock
         result = None
         provider_used = "mock"
 
-        result = self._try_gemini(prompt, institution_context, system_prompt)
+        result = self._try_claude(prompt, institution_context, system_prompt)
         if result:
-            provider_used = "gemini-2.5-flash"
+            provider_used = "claude-sonnet-4-6"
         else:
-            result = self._try_groq(prompt, institution_context, system_prompt)
+            result = self._try_gemini(prompt, institution_context, system_prompt)
             if result:
-                provider_used = "groq-llama-3.1"
+                provider_used = "gemini-2.5-flash"
+            else:
+                result = self._try_groq(prompt, institution_context, system_prompt)
+                if result:
+                    provider_used = "groq-llama-3.1"
 
         is_mock = result is None
         if is_mock:
@@ -276,6 +280,14 @@ Rules:
         get_settings.cache_clear()
         fresh = get_settings()
         changed = False
+        if fresh.anthropic_api_key and not getattr(self, "_claude_client", None):
+            try:
+                import anthropic
+                self._claude_client = anthropic.Anthropic(api_key=fresh.anthropic_api_key)
+                logger.info("Claude provider initialized (late-load from updated .env)")
+                changed = True
+            except Exception as e:
+                logger.warning("Claude late-init failed: %s", e)
         if fresh.groq_api_key and not self._groq_client:
             try:
                 from groq import Groq

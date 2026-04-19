@@ -582,7 +582,10 @@ function WorkflowCanvas() {
       }
       const d = await listWorkflows(tenant);
       setWorkflows(d.workflows);
-      // Navigate to architect page — the next step in the flow
+      // Signal the architect page to auto-generate ERP design
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem("orq_auto_design", "1");
+      }
       router.push("/console/architect");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Deploy failed");

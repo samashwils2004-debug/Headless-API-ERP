@@ -472,6 +472,46 @@ export async function listApiKeys(tenant: TenantContext) {
   return parse<{ keys: ApiKeyItem[] }>(response);
 }
 
+// ── ERP Design generation ────────────────────────────────────────────────
+
+export type DesignSpec = {
+  system_name: string;
+  modules: Array<{
+    id: string;
+    domain_id: string;
+    label: string;
+    description: string;
+    icon: string;
+    color: string;
+    primary_entity: string;
+    fields: Array<{ name: string; type: string; label: string }>;
+    actions: string[];
+    nav_position: number;
+  }>;
+  relationships: Array<{
+    from_module: string;
+    to_module: string;
+    type: string;
+    label: string;
+  }>;
+  nav_groups: Array<{ label: string; module_ids: string[] }>;
+  layout: string;
+  rationale: string;
+};
+
+export async function generateERPDesign(tenant: TenantContext, archId: string) {
+  const response = await fetch(`/api/architect/${archId}/generate-design`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify({ prompt: "Generate ERP design" }),
+  });
+  return parse<{
+    design_spec: DesignSpec;
+    provider_used: string;
+    is_mock: boolean;
+  }>(response);
+}
+
 export async function revokeApiKey(tenant: TenantContext, keyId: string) {
   const response = await fetch(`/api/api-keys/${keyId}`, {
     method: "DELETE",

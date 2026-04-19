@@ -550,6 +550,124 @@ def list_versions(
     return {"versions": [ArchitectureVersionResponse.model_validate(v) for v in versions]}
 
 
+class DesignRequest(BaseModel):
+    prompt: str = "Generate ERP design"
+
+
+_ERP_DESIGN_SYSTEM_PROMPT = """You are an ERP design architect for Orquestra.
+Given a domain graph and deployed workflow schemas, produce a JSON ERP design spec.
+
+Output ONLY valid JSON with this exact structure:
+{
+  "system_name": "string",
+  "modules": [
+    {
+      "id": "string",
+      "domain_id": "string",
+      "label": "string",
+      "description": "string",
+      "icon": "string",
+      "color": "#hex",
+      "primary_entity": "string",
+      "fields": [{"name": "string", "type": "string", "label": "string"}],
+      "actions": ["string"],
+      "nav_position": number
+    }
+  ],
+  "relationships": [
+    {
+      "from_module": "string",
+      "to_module": "string",
+      "type": "one_to_many|many_to_many|one_to_one",
+      "label": "string"
+    }
+  ],
+  "nav_groups": [{"label": "string", "module_ids": ["string"]}],
+  "layout": "sidebar_nav|top_nav",
+  "rationale": "string"
+}
+
+Rules:
+- One module per domain that has a linked workflow
+- Fields come from the workflow schema fields
+- Actions come from the workflow states (e.g. Submit, Approve, Reject)
+- Relationships come from domain integrations
+- nav_position is 1-based ordering
+- Return ONLY the JSON, no markdown"""
+
+
+@router.post("/architect/{arch_id}/generate-design")
+async def generate_design(
+    arch_id: str,
+    body: DesignRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
+):
+    """Use the AI provider cascade to generate an ERP design spec from the architecture graph + workflow schemas."""
+    import json as _json
+
+    arch = _get_arch_or_404(arch_id, tenant, db)
+    domains = arch.graph_json.get("erp_system", {}).get("domains", [])
+
+    workflow_schemas = []
+    for domain in domains:
+        wf_id = domain.get("workflow_id")
+        if not wf_id:
+            continue
+        wf = db.query(Workflow).filter(
+            Workflow.id == wf_id,
+            Workflow.institution_id == tenant.institution_id,
+        ).first()
+        if wf and wf.definition:
+            schema = wf.definition.get("schema", {})
+            states = list(wf.definition.get("states", {}).keys())
+            workflow_schemas.append({
+                "domain_id": domain["id"],
+                "domain_label": domain.get("label", domain["id"]),
+                "workflow_name": wf.name,
+                "schema_fields": schema.get("fields", []),
+                "states": states,
+                "color": domain.get("color"),
+            })
+
+    context = {
+        "system_name": arch.name,
+        "domains": [{"id": d["id"], "label": d.get("label", d["id"])} for d in domains],
+        "integrations": arch.graph_json.get("erp_system", {}).get("integrations", []),
+        "workflow_schemas": workflow_schemas,
+    }
+
+    router_instance = get_provider_router()
+    user_prompt = (
+        f"Design an ERP for: {arch.name}\n\n"
+        f"Context: {_json.dumps(context)[:3000]}"
+    )
+
+    response = router_instance.generate(
+        user_prompt,
+        {"mode": "erp_design"},
+        system_prompt=_ERP_DESIGN_SYSTEM_PROMPT,
+    )
+
+    design_spec = response["result"]
+
+    arch.visualization_config = {
+        **(arch.visualization_config or {}),
+        "design_spec": design_spec,
+        "design_generated_at": utcnow_naive().isoformat(),
+        "provider_used": response["provider_used"],
+    }
+    db.commit()
+
+    return {
+        "design_spec": design_spec,
+        "provider_used": response["provider_used"],
+        "is_mock": response["is_mock"],
+    }
+
+
 @router.get("/architect/{arch_id}/available-workflows")
 def available_workflows(
     arch_id: str,

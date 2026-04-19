@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     ]
     console_origin: str = "http://localhost:3000"
 
-    # AI providers — all optional, cascade: Gemini → Groq → Mock
+    # AI providers — all optional, cascade: Claude → Gemini → Groq → Mock
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     groq_api_key: str = ""

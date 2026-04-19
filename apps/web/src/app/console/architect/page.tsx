@@ -29,13 +29,16 @@ import {
   getArchitectureVersions,
   compileArchitecture,
   linkWorkflowToDomain,
+  generateERPDesign,
   type ArchitectureItem,
   type ArchitectureVersionItem,
+  type DesignSpec,
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 import type { DomainDef, ERPDomainGraph } from "@/types/contracts";
 import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
+import { ERPDesign } from "@/components/console/ERPDesign";
 
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
@@ -78,6 +81,8 @@ export default function ArchitectPage() {
   const [keyName, setKeyName] = useState("Default API Key");
   const [complianceTags, setComplianceTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"graph" | "preview">("graph");
+  const [designSpec, setDesignSpec] = useState<DesignSpec | null>(null);
+  const [generatingDesign, setGeneratingDesign] = useState(false);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -94,6 +99,24 @@ export default function ArchitectPage() {
       ]);
       setVersions(versionsData.versions);
       setAvailableWorkflows(workflowsData.workflows);
+
+      // Auto-generate ERP design if redirected from workflow deploy
+      const autoDesign =
+        typeof sessionStorage !== "undefined"
+          ? sessionStorage.getItem("orq_auto_design")
+          : null;
+      if (autoDesign && a && workflowsData.workflows.length > 0) {
+        sessionStorage.removeItem("orq_auto_design");
+        setGeneratingDesign(true);
+        generateERPDesign({ institutionId: context.institutionId, projectId: context.projectId }, a.id)
+          .then((res) => {
+            setDesignSpec(res.design_spec);
+            setViewMode("preview");
+            toast.success("ERP design generated");
+          })
+          .catch(() => {})
+          .finally(() => setGeneratingDesign(false));
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load architecture");
     } finally {
@@ -243,14 +266,20 @@ export default function ArchitectPage() {
         )}
       </div>
 
-      {viewMode === "preview" && arch?.visualization_config && Object.keys(arch.visualization_config).length > 0 ? (
-        <ERPPreview config={arch.visualization_config as VisualizationConfig} />
-      ) : viewMode === "preview" ? (
-        <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
-          <Eye size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
-          <p className="text-sm" style={{ color: "#71717a" }}>No visualization config yet.</p>
-          <p className="text-xs mt-1" style={{ color: "#52525b" }}>Add domains and apply a prompt to generate the ERP preview.</p>
-        </div>
+      {viewMode === "preview" ? (
+        designSpec ? (
+          <ERPDesign spec={designSpec} />
+        ) : (arch?.visualization_config as Record<string, unknown>)?.design_spec ? (
+          <ERPDesign spec={(arch!.visualization_config as Record<string, unknown>).design_spec as DesignSpec} />
+        ) : arch?.visualization_config && Object.keys(arch.visualization_config).length > 0 ? (
+          <ERPPreview config={arch.visualization_config as VisualizationConfig} />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
+            <Eye size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
+            <p className="text-sm" style={{ color: "#71717a" }}>No design generated yet.</p>
+            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Link workflows to domains, then click Generate ERP Design.</p>
+          </div>
+        )
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
         {/* Left: domain graph + prompt */}
@@ -472,6 +501,33 @@ export default function ArchitectPage() {
               {domains.length === 0 && (
                 <p className="text-xs mt-2 text-center" style={{ color: "#52525b" }}>Add domains first</p>
               )}
+
+              <button
+                onClick={async () => {
+                  if (!arch) return;
+                  setGeneratingDesign(true);
+                  try {
+                    const res = await generateERPDesign(tenant, arch.id);
+                    setDesignSpec(res.design_spec);
+                    setViewMode("preview");
+                    toast.success("ERP design generated");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Design generation failed");
+                  } finally {
+                    setGeneratingDesign(false);
+                  }
+                }}
+                disabled={generatingDesign || availableWorkflows.length === 0}
+                className="w-full flex items-center justify-center gap-2 rounded px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 mt-2"
+                style={{ background: "#8b5cf6", color: "#fff" }}
+              >
+                {generatingDesign ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Eye size={13} />
+                )}
+                {generatingDesign ? "Generating design\u2026" : "Generate ERP Design"}
+              </button>
             </div>
           ) : (
             /* API Key result */
