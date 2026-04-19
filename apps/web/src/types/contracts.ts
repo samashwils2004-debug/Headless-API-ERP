@@ -9,7 +9,6 @@ export interface AuthUser {
   name: string;
   role: string;
 }
-
 export interface ProjectItem {
   id: string;
   institution_id: string;
@@ -17,16 +16,29 @@ export interface ProjectItem {
   slug: string;
   environment: "test" | "production";
 }
-
 export interface WorkflowTransition {
   to: string;
-  condition: string;
-  emit_event?: string;
+  condition: string | null;
+  emit_event?: string | null;
 }
 
 export interface WorkflowState {
   type: StateType;
   transitions: WorkflowTransition[];
+}
+
+export interface SchemaField {
+  name: string;
+  type: "string" | "number" | "boolean";
+  required: boolean;
+  min?: number | null;
+  max?: number | null;
+  enum?: string[] | null;
+  format?: string | null;
+}
+
+export interface WorkflowSchema {
+  fields: SchemaField[];
 }
 
 export interface WorkflowDefinition {
@@ -35,6 +47,7 @@ export interface WorkflowDefinition {
   version?: string;
   initial_state: string;
   states: Record<string, WorkflowState>;
+  schema?: WorkflowSchema;
 }
 
 export interface BlueprintMetadata {
@@ -51,7 +64,8 @@ export interface BlueprintRole {
 
 export interface BlueprintEvent {
   type: string;
-  emit_on: string;
+  emit_on?: string;
+  version?: string;
 }
 
 export interface InstitutionalBlueprint {
@@ -62,6 +76,30 @@ export interface InstitutionalBlueprint {
   };
   roles: BlueprintRole[];
   events?: BlueprintEvent[];
+}
+
+export interface WorkflowBlueprint {
+  workflow: WorkflowDefinition & { schema?: WorkflowSchema };
+  roles: BlueprintRole[];
+  events: BlueprintEvent[];
+  compliance_tags: string[];
+}
+
+export interface DomainDef {
+  id: string;
+  label: string;
+  color?: string | null;
+  icon?: string;
+  modules?: Array<{ id: string; label: string }>;
+  requires_workflow?: boolean;
+  workflow_id?: string | null;
+  workflow_name?: string | null;
+}
+
+export interface ERPDomainGraph {
+  erp_system: {
+    domains: DomainDef[];
+  };
 }
 
 export interface DomainEvent {
@@ -96,4 +134,3 @@ export interface ValidationResult {
     warnings: string[];
   };
 }
-

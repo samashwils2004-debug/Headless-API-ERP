@@ -10,8 +10,9 @@ import { listWorkflows, undeployWorkflow, updateWorkflow } from "@/lib/console-a
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useBlueprintStore } from "@/lib/stores/blueprint-store";
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
+import type { WorkflowDefinition } from "@/types/contracts";
 
-function localValidate(definition: { states?: Record<string, { transitions?: Array<{ to: string }> }>; initial_state?: string }) {
+function localValidate(definition: Pick<WorkflowDefinition, "states" | "initial_state">) {
   const errors: string[] = [];
   const states = definition.states || {};
   const initial = definition.initial_state;
@@ -69,13 +70,10 @@ export default function WorkflowEditorPage() {
     setDefinitionText(JSON.stringify(workflow.definition, null, 2));
   }, [workflow]);
 
-  const parsedDefinition = useMemo(() => {
+  const parsedDefinition = useMemo<WorkflowDefinition | null>(() => {
     try {
       return definitionText.trim()
-        ? (JSON.parse(definitionText) as {
-            states?: Record<string, { transitions?: Array<{ to: string }> }>;
-            initial_state?: string;
-          })
+        ? (JSON.parse(definitionText) as WorkflowDefinition)
         : null;
     } catch {
       return null;
@@ -114,7 +112,7 @@ export default function WorkflowEditorPage() {
     try {
       await updateWorkflow(tenant, workflow.id, {
         name: workflowName.trim(),
-        definition: parsedDefinition as Record<string, unknown>,
+        definition: parsedDefinition,
         is_ai_generated: workflow.is_ai_generated,
       });
       await refreshWorkflows();

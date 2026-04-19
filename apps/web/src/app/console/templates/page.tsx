@@ -1,5 +1,5 @@
 "use client";
-
+import { WorkflowGraphSVG } from "@/components/console/WorkflowGraphSVG";
 import { useEffect, useState, useCallback } from "react";
 import {
   Layers,
@@ -22,62 +22,6 @@ import {
   type CustomizeResult,
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
-
-// ── SVG State Machine ──────────────────────────────────────────────────────
-
-function WorkflowGraphSVG({ definition }: { definition: Record<string, unknown> }) {
-  const mainWf = (definition?.workflows as Record<string, unknown>)?.main as Record<string, unknown> | undefined;
-  if (!mainWf) return <p className="text-[#52525b] text-sm text-center py-6">No graph data</p>;
-  const stateMap = (mainWf.states as Record<string, unknown>) || {};
-  const stateNames = Object.keys(stateMap);
-  const transitions: Array<{ from: string; to: string; condition?: string }> =
-    (mainWf.transitions as Array<{ from: string; to: string; condition?: string }>) || [];
-  if (stateNames.length === 0) return <p className="text-[#52525b] text-sm text-center py-6">No states</p>;
-
-  const initialState = Object.entries(stateMap).find(([, s]) => (s as Record<string, unknown>)?.initial)?.[0] || stateNames[0];
-  const layerOf: Record<string, number> = { [initialState]: 0 };
-  const bfsQ = [initialState]; let h = 0;
-  while (h < bfsQ.length) {
-    const curr = bfsQ[h++];
-    for (const t of transitions) if (t.from === curr && !(t.to in layerOf)) { layerOf[t.to] = layerOf[curr] + 1; bfsQ.push(t.to); }
-  }
-  for (const s of stateNames) if (!(s in layerOf)) layerOf[s] = Math.max(0, ...Object.values(layerOf)) + 1;
-  const byLayer: Record<number, string[]> = {};
-  for (const [s, l] of Object.entries(layerOf)) { if (!byLayer[l]) byLayer[l] = []; byLayer[l].push(s); }
-  const layers = Object.keys(byLayer).map(Number).sort((a, b) => a - b);
-  const NW = 100, NH = 30, HGAP = 46, VGAP = 14, PAD = 14;
-  const maxRows = Math.max(...layers.map((l) => byLayer[l].length));
-  const totalH = PAD * 2 + maxRows * NH + (maxRows - 1) * VGAP;
-  const totalW = PAD * 2 + layers.length * NW + (layers.length - 1) * HGAP;
-  const pos: Record<string, { x: number; y: number }> = {};
-  layers.forEach((layer, li) => {
-    const states = byLayer[layer];
-    const bH = states.length * NH + (states.length - 1) * VGAP;
-    const startY = PAD + (totalH - PAD * 2 - bH) / 2;
-    states.forEach((state, si) => { pos[state] = { x: PAD + li * (NW + HGAP), y: startY + si * (NH + VGAP) }; });
-  });
-  const termSet = new Set(stateNames.filter((s) => !transitions.some((t) => t.from === s)));
-  return (
-    <svg viewBox={`0 0 ${totalW} ${totalH}`} className="w-full" style={{ maxHeight: 200, minHeight: 90 }}>
-      <defs><marker id="tmpl-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 1 L10 5 L0 9z" fill="#3f3f46" /></marker></defs>
-      {transitions.map((t, i) => {
-        const f = pos[t.from]; const to = pos[t.to]; if (!f || !to) return null;
-        const x1 = f.x + NW, y1 = f.y + NH / 2, x2 = to.x, y2 = to.y + NH / 2, mx = (x1 + x2) / 2;
-        return <path key={i} d={Math.abs(y1 - y2) < 3 ? `M${x1} ${y1} L${x2} ${y2}` : `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`} fill="none" stroke="#3f3f46" strokeWidth="1.5" markerEnd="url(#tmpl-arr)" />;
-      })}
-      {stateNames.map((name) => {
-        const p = pos[name]; if (!p) return null;
-        const isI = name === initialState; const isT = termSet.has(name);
-        return (
-          <g key={name}>
-            <rect x={p.x} y={p.y} width={NW} height={NH} rx={3} fill={isI ? "#172554" : isT ? "#141418" : "#1b1b24"} stroke={isI ? "#3b82f6" : isT ? "#52525b" : "#3f3f46"} strokeWidth={1.5} />
-            <text x={p.x + NW / 2} y={p.y + NH / 2 + 4} textAnchor="middle" fontSize="9" fill={isI ? "#93c5fd" : isT ? "#52525b" : "#d4d4d8"}>{name.length > 11 ? name.slice(0, 10) + "…" : name}</text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 function ValBadge({ label, passed }: { label: string; passed: boolean }) {
   return (
@@ -131,7 +75,7 @@ const CAT_STYLE: Record<string, { bg: string; text: string; border: string }> = 
 };
 const catStyle = (c: string) => CAT_STYLE[c] ?? CAT_STYLE.general;
 
-type DetailTab = "overview" | "graph" | "json" | "roles";
+type DetailTab = "overview" | "graph" | "json" | "schema";
 
 export default function TemplatesPage() {
   const context = useProjectContextStore((s) => s.context);
@@ -193,7 +137,7 @@ export default function TemplatesPage() {
     finally { setDeploying(false); }
   };
 
-  const roles = (detail?.definition?.roles as Array<{ name: string; permissions: string[] }>) || [];
+  const schemaFields = detail?.definition.schema?.fields ?? [];
 
   return (
     <div className="flex gap-5 h-[calc(100vh-120px)] min-h-0">
@@ -282,7 +226,7 @@ export default function TemplatesPage() {
             </div>
             {/* Tabs */}
             <div className="flex-none flex" style={{ borderBottom: "1px solid #25252b" }}>
-              {(["overview", "graph", "json", "roles"] as DetailTab[]).map((t) => (
+              {(["overview", "graph", "json", "schema"] as DetailTab[]).map((t) => (
                 <button key={t} onClick={() => setDetailTab(t)}
                   className="px-4 py-2.5 text-sm font-medium capitalize transition-colors"
                   style={detailTab === t ? { borderBottom: "2px solid #3b82f6", color: "#f4f4f5" } : { color: "#71717a" }}>
@@ -302,7 +246,7 @@ export default function TemplatesPage() {
                     <div className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
                       <div className="text-xs mb-1" style={{ color: "#71717a" }}>States</div>
                       <div className="text-sm font-medium" style={{ color: "#f4f4f5" }}>
-                        {Object.keys(((detail.definition.workflows as Record<string, unknown>)?.main as Record<string, unknown>)?.states as Record<string, unknown> || {}).length}
+                        {Object.keys(detail.definition.states).length}
                       </div>
                     </div>
                   </div>
@@ -322,17 +266,47 @@ export default function TemplatesPage() {
                   {JSON.stringify(detail.definition, null, 2)}
                 </pre>
               )}
-              {detailTab === "roles" && (
+              {detailTab === "schema" && (
                 <div className="space-y-3">
-                  {roles.length === 0 && <p className="text-sm" style={{ color: "#52525b" }}>No roles defined.</p>}
-                  {roles.map((role) => (
-                    <div key={role.name} className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
-                      <div className="text-sm font-medium mb-2" style={{ color: "#f4f4f5" }}>{role.name}</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(role.permissions || []).map((p) => (
-                          <span key={p} className="text-[11px] px-1.5 py-0.5 rounded"
-                            style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>{p}</span>
-                        ))}
+                  {schemaFields.length === 0 && <p className="text-sm" style={{ color: "#52525b" }}>No schema fields defined.</p>}
+                  {schemaFields.map((field) => (
+                    <div key={field.name} className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-medium" style={{ color: "#f4f4f5" }}>{field.name}</div>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded"
+                          style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>
+                          {field.type}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                        <span
+                          className="px-1.5 py-0.5 rounded"
+                          style={{
+                            background: field.required ? "#0a1a0a" : "#141418",
+                            color: field.required ? "#86efac" : "#71717a",
+                            border: `1px solid ${field.required ? "#1a3a1a" : "#25252b"}`,
+                          }}
+                        >
+                          {field.required ? "required" : "optional"}
+                        </span>
+                        {field.min != null && (
+                          <span className="px-1.5 py-0.5 rounded"
+                            style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>
+                            min: {field.min}
+                          </span>
+                        )}
+                        {field.max != null && (
+                          <span className="px-1.5 py-0.5 rounded"
+                            style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>
+                            max: {field.max}
+                          </span>
+                        )}
+                        {field.format && (
+                          <span className="px-1.5 py-0.5 rounded"
+                            style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>
+                            format: {field.format}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}

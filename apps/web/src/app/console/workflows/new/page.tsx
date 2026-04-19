@@ -46,7 +46,13 @@ import {
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
-import type { StateType } from "@/types/contracts";
+import type {
+  InstitutionalBlueprint,
+  SchemaField as WorkflowSchemaField,
+  StateType,
+  WorkflowBlueprint,
+  WorkflowDefinition,
+} from "@/types/contracts";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -72,10 +78,14 @@ type EdgeData = {
   emit_event?: string;
 };
 
+type WorkflowNode = Node<StateNodeData>;
+type WorkflowEdge = Edge<EdgeData>;
+type GeneratedBlueprint = InstitutionalBlueprint | WorkflowBlueprint;
+
 // ── Custom Nodes ───────────────────────────────────────────────────────────
 
-function InitialStateNode({ data, selected }: NodeProps) {
-  const d = data as StateNodeData;
+function InitialStateNode({ data, selected }: NodeProps<WorkflowNode>) {
+  const d = data;
   return (
     <div
       style={{
@@ -98,8 +108,8 @@ function InitialStateNode({ data, selected }: NodeProps) {
   );
 }
 
-function IntermediateStateNode({ data, selected }: NodeProps) {
-  const d = data as StateNodeData;
+function IntermediateStateNode({ data, selected }: NodeProps<WorkflowNode>) {
+  const d = data;
   return (
     <div
       style={{
@@ -122,8 +132,8 @@ function IntermediateStateNode({ data, selected }: NodeProps) {
   );
 }
 
-function TerminalStateNode({ data, selected }: NodeProps) {
-  const d = data as StateNodeData;
+function TerminalStateNode({ data, selected }: NodeProps<WorkflowNode>) {
+  const d = data;
   return (
     <div
       style={{
@@ -165,24 +175,24 @@ function slugify(label: string) {
 }
 
 function canvasToDefinition(
-  nodes: Node[],
-  edges: Edge[],
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
   name: string,
   schemaFields: SchemaField[]
-) {
-  const states: Record<string, unknown> = {};
+): WorkflowDefinition {
+  const states: WorkflowDefinition["states"] = {};
 
   let initialState = "";
   for (const node of nodes) {
-    const d = node.data as StateNodeData;
+    const d = node.data;
     const stateName = slugify(d.label) || node.id;
     if (d.stateType === "initial" && !initialState) initialState = stateName;
 
     const outEdges = edges.filter((e) => e.source === node.id);
     const transitions = outEdges.map((e) => {
-      const ed = (e.data || {}) as EdgeData;
+      const ed = e.data || {};
       const targetNode = nodes.find((n) => n.id === e.target);
-      const targetName = targetNode ? slugify((targetNode.data as StateNodeData).label) || e.target : e.target;
+      const targetName = targetNode ? slugify(targetNode.data.label) || e.target : e.target;
       return {
         to: targetName,
         condition: ed.condition || null,
@@ -196,7 +206,7 @@ function canvasToDefinition(
     };
   }
 
-  const definition: Record<string, unknown> = {
+  const definition: WorkflowDefinition = {
     name,
     initial_state: initialState,
     states,
@@ -205,7 +215,7 @@ function canvasToDefinition(
   if (schemaFields.length > 0) {
     definition.schema = {
       fields: schemaFields.map((f) => {
-        const field: Record<string, unknown> = {
+        const field: WorkflowSchemaField = {
           name: f.name,
           type: f.type,
           required: f.required,
@@ -225,16 +235,16 @@ function canvasToDefinition(
   return definition;
 }
 
-function blueprintToCanvas(blueprint: Record<string, unknown>) {
-  const wf = blueprint.workflow as Record<string, unknown>;
+function blueprintToCanvas(blueprint: GeneratedBlueprint) {
+  const wf = "workflow" in blueprint ? blueprint.workflow : blueprint.workflows.main;
   if (!wf || !wf.states) return { nodes: [], edges: [] };
 
-  const statesMap = wf.states as Record<string, Record<string, unknown>>;
-  const initialState = wf.initial_state as string;
+  const statesMap = wf.states;
+  const initialState = wf.initial_state;
 
   const stateNames = Object.keys(statesMap);
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
+  const nodes: WorkflowNode[] = [];
+  const edges: WorkflowEdge[] = [];
 
   // Layout: grid placement
   const cols = Math.ceil(Math.sqrt(stateNames.length + 1));
@@ -242,7 +252,7 @@ function blueprintToCanvas(blueprint: Record<string, unknown>) {
     const stateDef = statesMap[stateName];
     let stateType: StateType = "intermediate";
     if (stateName === initialState || stateDef?.type === "initial") stateType = "initial";
-    else if (!stateDef?.transitions || (stateDef.transitions as unknown[]).length === 0 || stateDef?.type === "terminal") stateType = "terminal";
+    else if (!stateDef?.transitions.length || stateDef?.type === "terminal") stateType = "terminal";
 
     const col = i % cols;
     const row = Math.floor(i / cols);
@@ -254,9 +264,9 @@ function blueprintToCanvas(blueprint: Record<string, unknown>) {
       data: { label: stateName, stateType },
     });
 
-    const transitions = (stateDef?.transitions || []) as Array<Record<string, unknown>>;
+    const transitions = stateDef?.transitions || [];
     for (const t of transitions) {
-      const toState = t.to as string;
+      const toState = t.to;
       if (!toState) continue;
       const edgeId = `${stateName}-${toState}-${Math.random().toString(36).slice(2, 6)}`;
       edges.push({
@@ -278,24 +288,23 @@ function blueprintToCanvas(blueprint: Record<string, unknown>) {
   return { nodes, edges };
 }
 
-function collectEventsAndRoles(edges: Edge[], blueprint?: CompileBlueprintResponse | null) {
+function collectEventsAndRoles(edges: WorkflowEdge[], blueprint?: CompileBlueprintResponse | null) {
   const events = new Set<string>();
   const roles = new Set<string>();
 
   for (const e of edges) {
-    const ed = (e.data || {}) as EdgeData;
+    const ed = e.data || {};
     if (ed.emit_event) events.add(ed.emit_event);
   }
 
   if (blueprint?.blueprint) {
-    const bp = blueprint.blueprint as Record<string, unknown>;
-    const bpEvents = (bp.events || []) as Array<Record<string, unknown>>;
+    const bpEvents = blueprint.blueprint.events ?? [];
     for (const ev of bpEvents) {
-      if (ev.type) events.add(ev.type as string);
+      if (ev.type) events.add(ev.type);
     }
-    const bpRoles = (bp.roles || []) as Array<Record<string, unknown>>;
-    for (const r of bpRoles) {
-      if (r.name) roles.add(r.name as string);
+    const bpRoles = blueprint.blueprint.roles ?? [];
+    for (const role of bpRoles) {
+      if (role.name) roles.add(role.name);
     }
   }
 
@@ -322,8 +331,8 @@ function WorkflowCanvas() {
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
 
   const [workflowName, setWorkflowName] = useState("New Workflow");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -359,7 +368,7 @@ function WorkflowCanvas() {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      const newEdge: Edge = {
+      const newEdge: WorkflowEdge = {
         ...params,
         id: `${params.source}-${params.target}-${Date.now()}`,
         type: "smoothstep",
@@ -369,7 +378,7 @@ function WorkflowCanvas() {
         labelBgStyle: { fill: "#1b1b24" },
         data: { condition: "", emit_event: "" },
       };
-      setEdges((eds: Edge[]) => addEdge(newEdge, eds));
+      setEdges((eds: WorkflowEdge[]) => addEdge(newEdge, eds));
     },
     [setEdges]
   );
@@ -398,13 +407,13 @@ function WorkflowCanvas() {
       const label = stateType === "initial" ? "start" : stateType === "terminal" ? "end" : "state";
       const id = newNodeId();
 
-      const newNode: Node = {
+      const newNode: WorkflowNode = {
         id,
         type: stateType,
         position,
         data: { label, stateType },
       };
-      setNodes((nds: Node[]) => nds.concat(newNode));
+      setNodes((nds: WorkflowNode[]) => nds.concat(newNode));
     },
     [rfInstance, setNodes]
   );
@@ -412,24 +421,24 @@ function WorkflowCanvas() {
   // ── Node label editing ────────────────────────────────────────────────────
 
   function updateNodeLabel(id: string, label: string) {
-    setNodes((nds: Node[]) =>
-      nds.map((n: Node) =>
+    setNodes((nds: WorkflowNode[]) =>
+      nds.map((n: WorkflowNode) =>
         n.id === id ? { ...n, data: { ...n.data, label } } : n
       )
     );
   }
 
   function updateNodeType(id: string, stateType: StateType) {
-    setNodes((nds: Node[]) =>
-      nds.map((n: Node) =>
+    setNodes((nds: WorkflowNode[]) =>
+      nds.map((n: WorkflowNode) =>
         n.id === id ? { ...n, type: stateType, data: { ...n.data, stateType } } : n
       )
     );
   }
 
   function deleteNode(id: string) {
-    setNodes((nds: Node[]) => nds.filter((n: Node) => n.id !== id));
-    setEdges((eds: Edge[]) => eds.filter((e: Edge) => e.source !== id && e.target !== id));
+    setNodes((nds: WorkflowNode[]) => nds.filter((n: WorkflowNode) => n.id !== id));
+    setEdges((eds: WorkflowEdge[]) => eds.filter((e: WorkflowEdge) => e.source !== id && e.target !== id));
     setSelectedNodeId(null);
   }
 
@@ -438,7 +447,7 @@ function WorkflowCanvas() {
   function openEdgeEditor(edgeId: string) {
     const edge = edges.find((e) => e.id === edgeId);
     if (!edge) return;
-    const ed = (edge.data || {}) as EdgeData;
+    const ed = edge.data || {};
     setEdgeCondition(ed.condition || "");
     setEdgeEvent(ed.emit_event || "");
     setEditingEdgeId(edgeId);
@@ -446,8 +455,8 @@ function WorkflowCanvas() {
 
   function saveEdgeLabel() {
     if (!editingEdgeId) return;
-    setEdges((eds: Edge[]) =>
-      eds.map((e: Edge) =>
+    setEdges((eds: WorkflowEdge[]) =>
+      eds.map((e: WorkflowEdge) =>
         e.id === editingEdgeId
           ? {
               ...e,
@@ -461,7 +470,7 @@ function WorkflowCanvas() {
   }
 
   function deleteEdge(id: string) {
-    setEdges((eds: Edge[]) => eds.filter((e: Edge) => e.id !== id));
+    setEdges((eds: WorkflowEdge[]) => eds.filter((e: WorkflowEdge) => e.id !== id));
     setSelectedEdgeId(null);
     setEditingEdgeId(null);
   }
@@ -497,31 +506,30 @@ function WorkflowCanvas() {
       setBlueprint(result);
 
       // Populate canvas from blueprint
-      const bp = result.blueprint as Record<string, unknown>;
-      const { nodes: bpNodes, edges: bpEdges } = blueprintToCanvas(bp);
+      const generatedBlueprint = result.blueprint;
+      const { nodes: bpNodes, edges: bpEdges } = blueprintToCanvas(generatedBlueprint);
       setNodes(bpNodes);
       setEdges(bpEdges);
 
       // Extract workflow name
-      const wf = bp.workflow as Record<string, unknown>;
-      if (wf?.name && typeof wf.name === "string") {
-        setWorkflowName(wf.name.replace(/_/g, " "));
+      const workflowDefinition =
+        "workflow" in generatedBlueprint ? generatedBlueprint.workflow : generatedBlueprint.workflows.main;
+      if (workflowDefinition.name) {
+        setWorkflowName(workflowDefinition.name.replace(/_/g, " "));
       }
 
       // Extract schema fields
-      const schema = wf?.schema as Record<string, unknown> | undefined;
-      if (schema?.fields) {
-        const fields = (schema.fields as Array<Record<string, unknown>>).map((f) => ({
-          id: `f_${f.name}_${Date.now()}`,
-          name: (f.name as string) || "",
-          type: ((f.type as "string" | "number" | "boolean") || "string"),
-          required: Boolean(f.required),
-          min: f.min as number | undefined,
-          max: f.max as number | undefined,
-          enumValues: (f.enum as string[] | undefined)?.join(", ") || "",
-        }));
-        setSchemaFields(fields);
-      }
+      setSchemaFields(
+        (workflowDefinition.schema?.fields ?? []).map((field) => ({
+          id: `f_${field.name}_${Date.now()}`,
+          name: field.name,
+          type: field.type,
+          required: Boolean(field.required),
+          min: field.min ?? undefined,
+          max: field.max ?? undefined,
+          enumValues: field.enum?.join(", ") || "",
+        }))
+      );
 
       setAiOpen(false);
     } catch (e) {
@@ -716,7 +724,7 @@ function WorkflowCanvas() {
                   }}
                   onClick={() => setSelectedNodeId(n.id)}
                 >
-                  {(n.data as StateNodeData).label}
+                  {n.data.label}
                 </div>
               ))}
             </div>
@@ -732,11 +740,11 @@ function WorkflowCanvas() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             nodeTypes={NODE_TYPES}
-            onNodeClick={(_: React.MouseEvent, node: Node) => {
+            onNodeClick={(_: React.MouseEvent, node: WorkflowNode) => {
               setSelectedNodeId(node.id);
               setSelectedEdgeId(null);
             }}
-            onEdgeClick={(_: React.MouseEvent, edge: Edge) => {
+            onEdgeClick={(_: React.MouseEvent, edge: WorkflowEdge) => {
               setSelectedEdgeId(edge.id);
               setSelectedNodeId(null);
               openEdgeEditor(edge.id);
@@ -963,12 +971,12 @@ function NodeDetailPanel({
   onTypeChange,
   onDelete,
 }: {
-  node: Node;
+  node: WorkflowNode;
   onLabelChange: (label: string) => void;
   onTypeChange: (type: StateType) => void;
   onDelete: () => void;
 }) {
-  const d = node.data as StateNodeData;
+  const d = node.data;
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid #1c1c22" }}>

@@ -18,7 +18,8 @@ import { toast } from "sonner";
 
 import { createProject, deleteProject, listProjects } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
-import { useProjectStore, type ProjectItem } from "@/lib/stores/project-store";
+import { useProjectStore } from "@/lib/stores/project-store";
+import type { ProjectItem } from "@/types/contracts";
 
 export default function ProjectsPage() {
   const router = useRouter();

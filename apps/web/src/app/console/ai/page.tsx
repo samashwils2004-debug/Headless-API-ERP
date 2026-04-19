@@ -10,29 +10,22 @@ import { assertDeployAllowed, hasBlockingValidationIssues } from "@/lib/enforcem
 import { useBlueprintStore } from "@/lib/stores/blueprint-store";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
-import type { InstitutionalBlueprint, ValidationResult, WorkflowDefinition } from "@/types/contracts";
+import type { InstitutionalBlueprint, SchemaField, WorkflowBlueprint, WorkflowDefinition } from "@/types/contracts";
 
-type Tab = "overview" | "graph" | "json" | "validation" | "roles";
+type Tab = "overview" | "graph" | "json" | "validation" | "roles" | "schema";
+type GeneratedBlueprint = InstitutionalBlueprint | WorkflowBlueprint;
 
 function coerceWorkflowDefinition(
-  blueprint: InstitutionalBlueprint | Record<string, unknown> | null
+  blueprint: GeneratedBlueprint | null
 ): WorkflowDefinition | null {
   if (!blueprint) {
     return null;
   }
 
-  const candidate = blueprint as {
-    workflows?: { main?: WorkflowDefinition };
-    workflow?: WorkflowDefinition;
-  };
-
-  if (candidate.workflows?.main) {
-    return candidate.workflows.main;
+  if ("workflows" in blueprint) {
+    return blueprint.workflows.main;
   }
-  if (candidate.workflow) {
-    return candidate.workflow;
-  }
-  return null;
+  return blueprint.workflow;
 }
 
 function renderGraph(workflowDefinition: WorkflowDefinition | null) {
@@ -138,7 +131,7 @@ export default function AIGeneratorPage() {
           },
         }
       );
-      setProposal(payload.blueprint || null, (payload.validation_result as ValidationResult | null) || null);
+      setProposal(payload.blueprint || null, payload.validation_result || null);
       setProposalId(payload.id || null);
       setTab("overview");
     } catch (compileError) {
@@ -180,12 +173,25 @@ export default function AIGeneratorPage() {
 
   const workflowDefinition = useMemo(() => coerceWorkflowDefinition(blueprint), [blueprint]);
 
-  const roles = (
-    ((blueprint as InstitutionalBlueprint | null)?.roles as Array<{ name: string; permissions: string[] }> | undefined) || []
-  ).map((role) => ({
+  const roles = (blueprint?.roles ?? []).map((role) => ({
     ...role,
     warning: role.permissions.includes("workflow:deploy") && !role.permissions.includes("project:write"),
   }));
+
+  const schemaFields = useMemo(() => {
+    if (!blueprint) return [];
+    // WorkflowBlueprint has .workflow; InstitutionalBlueprint has .workflows.main
+    const wf = "workflow" in blueprint ? blueprint.workflow : blueprint.workflows?.main;
+    return wf?.schema?.fields ?? [];
+  }, [blueprint]);
+
+  const events = blueprint?.events ?? [];
+  const complianceTags = useMemo(() => {
+    if (!blueprint) {
+      return [];
+    }
+    return "metadata" in blueprint ? blueprint.metadata.compliance_tags ?? [] : blueprint.compliance_tags;
+  }, [blueprint]);
 
   const stageRows = [
     { label: "Schema Validation", valid: validation?.schema.valid ?? false },
@@ -290,11 +296,10 @@ export default function AIGeneratorPage() {
                 Roles: {roles.length}
               </div>
               <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-tertiary)] p-3">
-                Events: {(((blueprint as InstitutionalBlueprint | null)?.events as unknown[]) || []).length}
+                Events: {events.length}
               </div>
               <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-tertiary)] p-3">
-                Compliance:{" "}
-                {((blueprint as InstitutionalBlueprint | null)?.metadata?.compliance_tags || []).join(", ") || "n/a"}
+                Compliance: {complianceTags.join(", ") || "n/a"}
               </div>
             </div>
           )}
@@ -358,6 +363,41 @@ export default function AIGeneratorPage() {
                 ))}
               </tbody>
             </table>
+          )}
+
+          {tab === "schema" && (
+            <div className="space-y-3">
+              {schemaFields.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No schema fields defined in this blueprint.</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)]">
+                      <th className="py-2 font-medium">Field</th>
+                      <th className="py-2 font-medium">Type</th>
+                      <th className="py-2 font-medium">Required</th>
+                      <th className="py-2 font-medium">Constraints</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schemaFields.map((field) => (
+                      <tr key={field.name} className="border-t border-[var(--border-default)]">
+                        <td className="py-2 font-mono text-[var(--text-primary)]">{field.name}</td>
+                        <td className="py-2">{field.type}</td>
+                        <td className="py-2">{field.required ? "Yes" : "No"}</td>
+                        <td className="py-2 text-[var(--text-secondary)]">
+                          {[
+                            field.min != null && `min: ${field.min}`,
+                            field.max != null && `max: ${field.max}`,
+                            field.enum?.length && `enum: ${field.enum.join(", ")}`,
+                          ].filter(Boolean).join(" | ") || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           )}
 
           <div className="flex items-center gap-2">

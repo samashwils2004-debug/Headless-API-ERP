@@ -1,4 +1,5 @@
 "use client";
+import { WorkflowGraphSVG } from "@/components/console/WorkflowGraphSVG";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -30,119 +31,9 @@ import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 import { toast } from "sonner";
+import type { InstitutionalBlueprint, WorkflowBlueprint, WorkflowDefinition } from "@/types/contracts";
 
 // ── SVG State Machine Graph ────────────────────────────────────────────────
-
-function WorkflowGraphSVG({ definition }: { definition: Record<string, unknown> }) {
-  // AI blueprints use `workflow.states`; scratch format uses `workflows.main.states`
-  const mainWf = ((definition?.workflow as Record<string, unknown>) ??
-    (definition?.workflows as Record<string, unknown>)?.main) as Record<string, unknown> | undefined;
-  if (!mainWf)
-    return <p className="text-center text-[#52525b] text-sm py-8">No graph data</p>;
-
-  const stateMap = (mainWf.states as Record<string, unknown>) || {};
-  const stateNames = Object.keys(stateMap);
-  const transitions: Array<{ from: string; to: string; condition?: string }> =
-    (mainWf.transitions as Array<{ from: string; to: string; condition?: string }>) || [];
-
-  if (stateNames.length === 0)
-    return <p className="text-center text-[#52525b] text-sm py-8">No states defined</p>;
-
-  const initialState =
-    Object.entries(stateMap).find(([, s]) => (s as Record<string, unknown>)?.initial)?.[0] ||
-    stateNames[0];
-
-  // BFS layer assignment
-  const layerOf: Record<string, number> = { [initialState]: 0 };
-  const bfsQueue = [initialState];
-  let head = 0;
-  while (head < bfsQueue.length) {
-    const curr = bfsQueue[head++];
-    for (const t of transitions) {
-      if (t.from === curr && !(t.to in layerOf)) {
-        layerOf[t.to] = layerOf[curr] + 1;
-        bfsQueue.push(t.to);
-      }
-    }
-  }
-  for (const s of stateNames) {
-    if (!(s in layerOf)) layerOf[s] = Math.max(0, ...Object.values(layerOf)) + 1;
-  }
-
-  const byLayer: Record<number, string[]> = {};
-  for (const [s, l] of Object.entries(layerOf)) {
-    if (!byLayer[l]) byLayer[l] = [];
-    byLayer[l].push(s);
-  }
-  const layers = Object.keys(byLayer)
-    .map(Number)
-    .sort((a, b) => a - b);
-
-  const NW = 108, NH = 32, HGAP = 52, VGAP = 18, PAD = 16;
-  const maxRows = Math.max(...layers.map((l) => byLayer[l].length));
-  const totalH = PAD * 2 + maxRows * NH + (maxRows - 1) * VGAP;
-  const totalW = PAD * 2 + layers.length * NW + (layers.length - 1) * HGAP;
-
-  const pos: Record<string, { x: number; y: number }> = {};
-  layers.forEach((layer, li) => {
-    const states = byLayer[layer];
-    const blockH = states.length * NH + (states.length - 1) * VGAP;
-    const startY = PAD + (totalH - PAD * 2 - blockH) / 2;
-    states.forEach((state, si) => {
-      pos[state] = { x: PAD + li * (NW + HGAP), y: startY + si * (NH + VGAP) };
-    });
-  });
-
-  const terminalSet = new Set(stateNames.filter((s) => !transitions.some((t) => t.from === s)));
-
-  return (
-    <svg viewBox={`0 0 ${totalW} ${totalH}`} className="w-full" style={{ maxHeight: 280, minHeight: 100 }}>
-      <defs>
-        <marker id="wf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0 1 L10 5 L0 9z" fill="#3f3f46" />
-        </marker>
-      </defs>
-      {transitions.map((t, i) => {
-        const f = pos[t.from];
-        const to = pos[t.to];
-        if (!f || !to) return null;
-        const x1 = f.x + NW, y1 = f.y + NH / 2;
-        const x2 = to.x, y2 = to.y + NH / 2;
-        const mx = (x1 + x2) / 2;
-        const d = Math.abs(y1 - y2) < 4
-          ? `M${x1} ${y1} L${x2} ${y2}`
-          : `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
-        return (
-          <g key={i}>
-            <path d={d} fill="none" stroke="#3f3f46" strokeWidth="1.5" markerEnd="url(#wf-arrow)" />
-            {t.condition && (
-              <text x={(x1 + x2) / 2} y={Math.min(y1, y2) - 5} textAnchor="middle" fontSize="8" fill="#52525b">
-                {t.condition.slice(0, 22)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-      {stateNames.map((name) => {
-        const p = pos[name];
-        if (!p) return null;
-        const isInit = name === initialState;
-        const isTerm = terminalSet.has(name);
-        return (
-          <g key={name}>
-            <rect x={p.x} y={p.y} width={NW} height={NH} rx={4}
-              fill={isInit ? "#172554" : isTerm ? "#141418" : "#1b1b24"}
-              stroke={isInit ? "#3b82f6" : isTerm ? "#52525b" : "#3f3f46"} strokeWidth={1.5} />
-            <text x={p.x + NW / 2} y={p.y + NH / 2 + 4} textAnchor="middle" fontSize="10"
-              fill={isInit ? "#93c5fd" : isTerm ? "#52525b" : "#d4d4d8"}>
-              {name.length > 13 ? name.slice(0, 12) + "…" : name}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 function ValidationBadge({ label, passed, errors }: { label: string; passed: boolean; errors: string[] }) {
   return (
@@ -168,8 +59,14 @@ function SkeletonLoader() {
   );
 }
 
-function RBACTable({ definition }: { definition: Record<string, unknown> }) {
-  const roles = (definition.roles as Array<{ name: string; permissions: string[] }>) || [];
+type GeneratedBlueprint = InstitutionalBlueprint | WorkflowBlueprint;
+
+function getBlueprintWorkflowDefinition(blueprint: GeneratedBlueprint): WorkflowDefinition {
+  return "workflow" in blueprint ? blueprint.workflow : blueprint.workflows.main;
+}
+
+function RBACTable({ definition }: { definition: GeneratedBlueprint }) {
+  const roles = definition.roles ?? [];
   if (roles.length === 0) return <p className="text-sm text-[#52525b]">No roles defined.</p>;
   return (
     <div className="space-y-3">
@@ -217,7 +114,20 @@ export default function WorkflowsPage() {
 
   const [scratchName, setScratchName] = useState("");
   const [scratchJson, setScratchJson] = useState(
-    JSON.stringify({ workflows: { main: { states: { submitted: { initial: true }, approved: {}, rejected: {} }, transitions: [{ from: "submitted", to: "approved", condition: "decision == 'approve'" }, { from: "submitted", to: "rejected", condition: "decision == 'reject'" }] } }, roles: [{ name: "reviewer", permissions: ["application:read", "application:transition"] }] }, null, 2)
+    JSON.stringify({
+      initial_state: "submitted",
+      states: {
+        submitted: {
+          type: "initial",
+          transitions: [
+            { to: "approved", condition: "decision == 'approve'", emit_event: "application.approved" },
+            { to: "rejected", condition: "decision == 'reject'", emit_event: "application.rejected" },
+          ],
+        },
+        approved: { type: "terminal", transitions: [] },
+        rejected: { type: "terminal", transitions: [] },
+      },
+    }, null, 2)
   );
   const [scratchError, setScratchError] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
@@ -311,8 +221,8 @@ export default function WorkflowsPage() {
 
   const handleDeployScratch = async () => {
     if (!scratchName.trim()) { setScratchError("Name required"); return; }
-    let def: Record<string, unknown>;
-    try { def = JSON.parse(scratchJson); } catch { setScratchError("Invalid JSON"); return; }
+    let def: WorkflowDefinition;
+    try { def = JSON.parse(scratchJson) as WorkflowDefinition; } catch { setScratchError("Invalid JSON"); return; }
     setScratchError(null);
     setDeploying(true);
     try {
@@ -327,11 +237,12 @@ export default function WorkflowsPage() {
     }
   };
 
-  const blueprintDef = blueprint?.blueprint as Record<string, unknown> | null;
+  const blueprintDef = blueprint?.blueprint ?? null;
   // Backend returns { valid, errors } per stage; top-level key is is_valid (not all_passed)
   const validation = blueprint?.validation_result as Record<string, { valid: boolean; errors: string[] }> | null;
   const validPassed = validation ? Object.entries(validation).filter(([k]) => k !== "is_valid").every(([, v]) => v.valid) : true;
   const toggleTag = (t: string) => setTags((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
+  const blueprintWorkflow = blueprintDef ? getBlueprintWorkflowDefinition(blueprintDef) : null;
 
   return (
     <div className="space-y-5">
@@ -579,9 +490,9 @@ export default function WorkflowsPage() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span style={{ color: "#71717a" }}>Provider</span>
-                          <span style={{ color: "#a1a1aa" }}>{(blueprint as Record<string, unknown>).provider_used as string ?? "ai"}</span>
+                          <span style={{ color: "#a1a1aa" }}>{blueprint.provider_used || "ai"}</span>
                         </div>
-                        {(blueprint as Record<string, unknown>).is_mock ? (
+                        {blueprint.is_mock ? (
                           <div className="text-[11px] px-2 py-1 rounded" style={{ background: "#1a120a", color: "#fbbf24", border: "1px solid #3a2a0a" }}>
                             Demo mode — connect an AI provider for live generation
                           </div>
@@ -590,7 +501,7 @@ export default function WorkflowsPage() {
                       <div className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
                         <div className="text-xs font-medium mb-2" style={{ color: "#71717a" }}>States</div>
                         <div className="flex flex-wrap gap-1.5">
-                          {Object.keys(((blueprintDef.workflow as Record<string, unknown>)?.states ?? ((blueprintDef.workflows as Record<string, unknown>)?.main as Record<string, unknown>)?.states ?? {}) as Record<string, unknown>).map((s) => (
+                          {Object.keys(blueprintWorkflow?.states ?? {}).map((s) => (
                             <span key={s} className="text-[11px] px-1.5 py-0.5 rounded"
                               style={{ background: "#141418", color: "#a1a1aa", border: "1px solid #25252b" }}>{s}</span>
                           ))}

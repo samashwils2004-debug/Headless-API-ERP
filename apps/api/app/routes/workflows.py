@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,8 @@ from app.core.rbac_engine import check_permission
 from app.models import Workflow
 from app.schemas import WorkflowCreate, WorkflowResponse
 from app.tenant import TenantContext, get_tenant_context
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -121,7 +124,7 @@ async def deploy_workflow(
             data={"workflow_id": workflow.id, "workflow_name": workflow.name, "version": workflow.version},
         )
     except Exception:
-        pass  # Event failure must not block deploy response
+        logger.warning("Event emission failed during deploy for workflow %s", workflow.id, exc_info=True)
     return workflow
 
 
@@ -160,7 +163,7 @@ async def undeploy_workflow(
             data={"workflow_id": workflow.id, "workflow_name": workflow.name, "version": workflow.version},
         )
     except Exception:
-        pass  # Event failure must not block undeploy response
+        logger.warning("Event emission failed during undeploy for workflow %s", workflow.id, exc_info=True)
     return workflow
 
 

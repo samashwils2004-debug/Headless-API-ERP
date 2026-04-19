@@ -2,13 +2,13 @@
 
 import { create } from "zustand";
 
-import type { InstitutionalBlueprint, ValidationResult } from "@/types/contracts";
+import type { InstitutionalBlueprint, ValidationResult, WorkflowBlueprint } from "@/types/contracts";
 
 type BlueprintState = {
-  proposal: (InstitutionalBlueprint | Record<string, unknown>) | null;
+  proposal: (InstitutionalBlueprint | WorkflowBlueprint) | null;
   validationResult: ValidationResult | null;
   setProposal: (
-    proposal: (InstitutionalBlueprint | Record<string, unknown>) | null,
+    proposal: (InstitutionalBlueprint | WorkflowBlueprint) | null,
     validationResult: ValidationResult | null
   ) => void;
   clear: () => void;

@@ -18,6 +18,9 @@ from app.time_utils import utcnow_naive
 
 router = APIRouter()
 
+"""This Generates simple project API keys (sk_live_prefix).
+    Architect compile uses core/api_key_utils.py for versioned keys (sk_erp_v{n}_prefix)
+    The two keys are intentionally different to avoid collisions - simple keys have no version binding"""
 
 def _generate_api_key() -> tuple[str, str, str]:
     """Generate key, return (full_key, key_hash, key_prefix)."""

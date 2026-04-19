@@ -1,6 +1,8 @@
 ﻿"""Event-native engine: persist in PostgreSQL, append Redis stream, broadcast via WebSocket."""
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -8,6 +10,8 @@ from app.models import Event
 from app.observability import EVENT_STREAM_APPEND_FAILURES, EVENTS_EMITTED, normalize_event_type
 from app.time_utils import utcnow_naive
 from app.ws import hub
+
+logger = logging.getLogger(__name__)
 
 try:
     import redis
@@ -60,7 +64,7 @@ class EventEngine:
                 )
             except Exception:
                 EVENT_STREAM_APPEND_FAILURES.inc()
-                pass
+                logger.debug("Redis stream append failed for %s", stream_name, exc_info=True)
 
         await hub.broadcast(
             institution_id,

@@ -31,6 +31,15 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         const user = await getCurrentUser();
         setUser(user);
 
+        // Self-healing: if the local storage cached an old institution ID (e.g. from a prior DB seed),
+        // we must clear it out so it doesn't cause Cross-tenant access denied errors.
+        if (context.institutionId && context.institutionId !== user.institution_id) {
+          setContext({ institutionId: "", projectId: "", projectName: "", environment: "test" });
+          // Also clear from local scope to avoid using wrong values in this bootstrap pass
+          context.institutionId = "";
+          context.projectId = "";
+        }
+
         const bootstrapTenant: TenantContext = {
           institutionId: user.institution_id,
           projectId: context.projectId || "bootstrap",
@@ -68,7 +77,8 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
           });
           setWorkflows(workflowsPayload.workflows);
         }
-      } catch {
+      } catch (err) {
+        console.warn("[ConsoleProvider] bootstrap failed:", err);
         setUser(null);
       }
     };

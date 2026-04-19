@@ -44,15 +44,14 @@ class Settings(BaseSettings):
     console_origin: str = "http://localhost:3000"
 
     # AI providers — all optional, cascade: Gemini → Groq → Mock
+    anthropic_api_key: str = ""
     gemini_api_key: str = ""
     groq_api_key: str = ""
-    openai_api_key: str = ""  # kept for backward compat
-    openai_model: str = "gpt-4-turbo"
-    supabase_url: str = ""
-    supabase_publishable_key: str = ""
-    supabase_service_role_key: str = ""
-    supabase_jwt_secret: str = ""
-    supabase_token_expire_minutes: int = 10
+    aiven_url: str = ""
+    aiven_publishable_key: str = ""
+    aiven_service_role_key: str = ""
+    aiven_jwt_secret: str = ""
+    aiven_token_expire_minutes: int = 10
 
     ai_cache_ttl: int = 86400  # 24h Redis cache for AI responses
 

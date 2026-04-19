@@ -1,14 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-
-export type ProjectItem = {
-  id: string;
-  institution_id: string;
-  name: string;
-  slug: string;
-  environment: "test" | "production";
-};
+import type { ProjectItem } from "@/types/contracts";
 
 type ProjectState = {
   projects: ProjectItem[];

@@ -60,5 +60,4 @@ class BlueprintGenerator:
         return result
 
 
-# Backward-compat alias
-BlueprintCompiler = BlueprintGenerator
+

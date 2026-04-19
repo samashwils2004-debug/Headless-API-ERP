@@ -16,7 +16,16 @@
 // and then sends them in the headers as X-Institution-Id and X-Project-Id (attaching CSRF token from the cookie)
 
 import { assertTenantContext } from "@/lib/enforcement/tenantGuard";
-import type { AuthUser, DomainEvent, InstitutionalBlueprint, ProjectItem, ValidationResult, WorkflowDefinition } from "@/types/contracts";
+import type {
+  AuthUser,
+  DomainEvent,
+  ERPDomainGraph,
+  InstitutionalBlueprint,
+  ProjectItem,
+  ValidationResult,
+  WorkflowBlueprint,
+  WorkflowDefinition,
+} from "@/types/contracts";
 
 export type TenantContext = {
   institutionId: string;
@@ -50,9 +59,11 @@ export type ApplicationItem = {
 
 export type CompileBlueprintResponse = {
   id: string;
-  blueprint: InstitutionalBlueprint | Record<string, unknown>;
+  blueprint: InstitutionalBlueprint | WorkflowBlueprint;
   validation_result: ValidationResult | null;
   status: string;
+  provider_used: string;
+  is_mock: boolean;
 };
 
 function headersForTenant(tenant: TenantContext, extra: Record<string, string> = {}) {
@@ -153,7 +164,7 @@ export async function listWorkflows(tenant: TenantContext) {
 
 export async function createWorkflow(
   tenant: TenantContext,
-  payload: { name: string; definition: Record<string, unknown>; is_ai_generated: boolean }
+  payload: { name: string; definition: WorkflowDefinition; is_ai_generated: boolean }
 ) {
   const response = await fetch("/api/workflows", {
     method: "POST",
@@ -166,7 +177,7 @@ export async function createWorkflow(
 export async function updateWorkflow(
   tenant: TenantContext,
   workflowId: string,
-  payload: { name: string; definition: Record<string, unknown>; is_ai_generated: boolean }
+  payload: { name: string; definition: WorkflowDefinition; is_ai_generated: boolean }
 ) {
   const response = await fetch(`/api/workflows/${workflowId}`, {
     method: "PUT",
@@ -229,12 +240,19 @@ export async function compileBlueprint(
   return parse<CompileBlueprintResponse>(response);
 }
 
+export type DeployBlueprintResponse = {
+  workflow_id: string;
+  workflow_name: string;
+  version: number;
+  message: string;
+};
+
 export async function deployBlueprint(tenant: TenantContext, proposalId: string) {
   const response = await fetch(`/api/ai/deploy/${proposalId}`, {
     method: "POST",
     headers: headersForTenant(tenant, { "Content-Type": "application/json" }),
   });
-  return parse<{ name: string; definition: Record<string, unknown>; is_ai_generated: boolean }>(response);
+  return parse<DeployBlueprintResponse>(response);
 }
 
 // ── Template types ──────────────────────────────────────────────────────────
@@ -249,7 +267,7 @@ export type TemplateItem = {
 };
 
 export type TemplateDetail = TemplateItem & {
-  definition: Record<string, unknown>;
+  definition: WorkflowDefinition;
 };
 
 export type CustomizeResult = {
@@ -278,7 +296,7 @@ export type ArchitectureItem = {
   institution_id: string;
   project_id: string;
   name: string;
-  graph_json: Record<string, unknown>;
+  graph_json: ERPDomainGraph | Record<string, unknown>;
   visualization_config: Record<string, unknown>;
   version: number;
 };
@@ -372,7 +390,7 @@ export async function compileArchitecture(
 export type ArchitectPromptResult =
   | {
       type: "success";
-      graph: Record<string, unknown>;
+      graph: ERPDomainGraph | Record<string, unknown>;
       diff: { summary: string; operation: string | null };
       version: number;
       rationale: string;

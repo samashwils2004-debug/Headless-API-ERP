@@ -1,6 +1,7 @@
 ﻿"""Deterministic workflow executor using immutable workflow definitions."""
 from __future__ import annotations
 
+import logging
 from time import perf_counter
 from typing import Any
 
@@ -13,6 +14,8 @@ from app.models import Application, Workflow
 from app.observability import WORKFLOW_EXECUTION_TIME_MS
 from app.time_utils import utcnow_naive
 from app.utils import validate_schema_fields
+
+logger = logging.getLogger(__name__)
 
 
 class WorkflowExecutionError(ValueError):
@@ -141,6 +144,7 @@ class WorkflowEngine:
                 self.db.rollback()
                 if not self._is_deadlock(exc):
                     raise
+                logger.warning("Deadlock detected, retrying commit for application %s", application.id)
 
         raise WorkflowExecutionError("Database deadlock retries exhausted")
 

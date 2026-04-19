@@ -80,6 +80,15 @@ class ProviderRouter:
             except Exception as e:
                 logger.warning("Redis cache unavailable: %s", e)
 
+        # Claude (The primary AI)
+        if self.settings.anthropic_api_key:
+            try:
+                import anthropic
+                self._claude_client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
+                logger.info("Claude provider initialized")
+            except Exception as e:
+                logger.warning("Claude init failed: %s", e)
+
         # Gemini
         if self.settings.gemini_api_key:
             try:
@@ -120,7 +129,7 @@ class ProviderRouter:
 
     def _build_system_prompt(self) -> str:
         return """You are an institutional ERP infrastructure compiler for Orquestra.
-Generate a JSON blueprint for the given prompt. The blueprint MUST be valid JSON with this exact structure:
+                Generate a JSON blueprint for the given prompt. The blueprint MUST be valid JSON with this exact structure:
 {
   "workflow": {
     "name": "string",
@@ -154,6 +163,27 @@ Rules:
 - If existing workflows are described in PROJECT CONTEXT, reuse their field names and role names
 - Return ONLY the JSON object, no markdown, no explanation"""
 
+    def _try_claude(self, prompt: str, context: dict, system_prompt: str | None = None) -> dict | None:
+        if not self._claude_client:
+            return None
+        try:
+            sys = system_prompt or self._build_system_prompt()
+            user_content = json.dumps({"requirement": prompt, "institution_context": context})
+            message = self._claude_client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                system=sys,
+                messages=[{"role": "user", "content": user_content}],
+            )
+            text = message.content[0].text.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+            return json.loads(text)
+        except Exception as e:
+            logger.warning("Claude provider failed: %s", e)
+            return None
+    
     def _try_gemini(self, prompt: str, context: dict, system_prompt: str | None = None) -> dict | None:
         if not self._gemini_client:
             return None

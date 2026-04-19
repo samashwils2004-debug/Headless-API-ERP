@@ -18,6 +18,8 @@ import {
   ChevronRight,
   Key,
   RefreshCw,
+  Eye,
+  PenTool,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -32,6 +34,8 @@ import {
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
+import type { DomainDef, ERPDomainGraph } from "@/types/contracts";
+import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
 
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
@@ -39,17 +43,6 @@ const DOMAIN_COLORS = [
   "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b",
   "#ef4444", "#06b6d4", "#ec4899", "#14b8a6",
 ];
-
-type DomainDef = {
-  id: string;
-  label: string;
-  color?: string | null;
-  icon?: string;
-  modules?: Array<{ id: string; label: string }>;
-  requires_workflow?: boolean;
-  workflow_id?: string | null;
-  workflow_name?: string | null;
-};
 
 type AvailableWorkflow = {
   id: string;
@@ -84,6 +77,7 @@ export default function ArchitectPage() {
   const [selectedWorkflowIds, setSelectedWorkflowIds] = useState<string[]>([]);
   const [keyName, setKeyName] = useState("Default API Key");
   const [complianceTags, setComplianceTags] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<"graph" | "preview">("graph");
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -131,7 +125,7 @@ export default function ArchitectPage() {
       }
 
       // type === "success"
-      setArch((prev) => prev ? { ...prev, graph_json: res.graph, version: res.version } : prev);
+      setArch((prev) => prev ? { ...prev, graph_json: res.graph, version: res.version, visualization_config: res.visualization_config ?? prev.visualization_config } : prev);
       if (res.diff?.summary) setLastDiff(res.diff.summary);
       setPrompt("");
 
@@ -181,8 +175,7 @@ export default function ArchitectPage() {
     }
   }
 
-  const erpSystem = (arch?.graph_json as { erp_system?: { domains?: DomainDef[] } } | undefined)?.erp_system;
-  const domains: DomainDef[] = erpSystem?.domains ?? [];
+  const domains: DomainDef[] = (arch?.graph_json as ERPDomainGraph | undefined)?.erp_system?.domains ?? [];
 
   if (noProject) {
     return (
@@ -214,13 +207,51 @@ export default function ArchitectPage() {
         <span className="ml-2 text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#3b82f630", background: "#3b82f610", color: "#60a5fa" }}>
           IAL
         </span>
+
+        {/* View mode toggle */}
+        <div className="ml-auto flex items-center rounded-lg border overflow-hidden" style={{ borderColor: "#25252b" }}>
+          <button
+            onClick={() => setViewMode("graph")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+            style={
+              viewMode === "graph"
+                ? { background: "#3b82f620", color: "#60a5fa" }
+                : { background: "transparent", color: "#71717a" }
+            }
+          >
+            <PenTool size={12} />
+            Graph
+          </button>
+          <button
+            onClick={() => setViewMode("preview")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+            style={
+              viewMode === "preview"
+                ? { background: "#8b5cf620", color: "#a78bfa" }
+                : { background: "transparent", color: "#71717a" }
+            }
+          >
+            <Eye size={12} />
+            Preview
+          </button>
+        </div>
+
         {arch && (
-          <span className="ml-auto text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#25252b", color: "#71717a" }}>
+          <span className="text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#25252b", color: "#71717a" }}>
             v{arch.version}
           </span>
         )}
       </div>
 
+      {viewMode === "preview" && arch?.visualization_config && Object.keys(arch.visualization_config).length > 0 ? (
+        <ERPPreview config={arch.visualization_config as VisualizationConfig} />
+      ) : viewMode === "preview" ? (
+        <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
+          <Eye size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
+          <p className="text-sm" style={{ color: "#71717a" }}>No visualization config yet.</p>
+          <p className="text-xs mt-1" style={{ color: "#52525b" }}>Add domains and apply a prompt to generate the ERP preview.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
         {/* Left: domain graph + prompt */}
         <div className="space-y-4">
@@ -556,6 +587,7 @@ export default function ArchitectPage() {
           </a>
         </div>
       </div>
+      )}
     </div>
   );
 }
