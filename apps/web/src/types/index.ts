@@ -1,13 +1,7 @@
 export * from "./contracts";
 
-export interface WorkflowState {
-  name: string;
-  type: 'initial' | 'terminal' | 'intermediate';
-  transitions: {
-    to: string;
-    condition: string;
-  }[];
-}
+// WorkflowState is defined in contracts.ts — do not redefine here.
+// The contracts.ts version is the canonical shape (type + transitions with emit_event).
 
 export interface ApiTab {
   id: string;

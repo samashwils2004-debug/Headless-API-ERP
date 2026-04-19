@@ -125,6 +125,45 @@ async def deploy_workflow(
     return workflow
 
 
+@router.post("/workflows/{workflow_id}/undeploy", response_model=WorkflowResponse)
+async def undeploy_workflow(
+    workflow_id: str,
+    tenant: TenantContext = Depends(get_tenant_context),
+    user=Depends(check_permission("workflow:deploy")),
+    db: Session = Depends(get_db),
+):
+    workflow = (
+        db.query(Workflow)
+        .filter(
+            Workflow.id == workflow_id,
+            Workflow.institution_id == tenant.institution_id,
+            Workflow.project_id == tenant.project_id,
+        )
+        .first()
+    )
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if not workflow.deployed:
+        return workflow
+
+    workflow.deployed = False
+    workflow.deployed_at = None
+    db.commit()
+    db.refresh(workflow)
+
+    try:
+        event_engine = EventEngine(db)
+        await event_engine.emit(
+            "workflow.undeployed",
+            institution_id=tenant.institution_id,
+            project_id=tenant.project_id,
+            data={"workflow_id": workflow.id, "workflow_name": workflow.name, "version": workflow.version},
+        )
+    except Exception:
+        pass  # Event failure must not block undeploy response
+    return workflow
+
+
 @router.put("/workflows/{workflow_id}", response_model=WorkflowResponse)
 def update_workflow(
     workflow_id: str,

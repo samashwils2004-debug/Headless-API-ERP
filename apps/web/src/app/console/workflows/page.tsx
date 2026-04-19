@@ -23,6 +23,7 @@ import {
   deployBlueprint,
   deployWorkflow,
   listWorkflows,
+  undeployWorkflow,
   type CompileBlueprintResponse,
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
@@ -220,6 +221,7 @@ export default function WorkflowsPage() {
   );
   const [scratchError, setScratchError] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
+  const [actingWorkflowId, setActingWorkflowId] = useState<string | null>(null);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -235,17 +237,43 @@ export default function WorkflowsPage() {
   };
 
   const handleDeploy = async (id: string) => {
-    await deployWorkflow(tenant, id);
-    await refreshWorkflows();
+    setActingWorkflowId(id);
+    try {
+      await deployWorkflow(tenant, id);
+      await refreshWorkflows();
+      toast.success("Workflow deployed");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Deploy failed");
+    } finally {
+      setActingWorkflowId(null);
+    }
+  };
+
+  const handleUndeploy = async (id: string) => {
+    if (!confirm("Undeploy this workflow? You can edit or delete it afterward.")) return;
+    setActingWorkflowId(id);
+    try {
+      await undeployWorkflow(tenant, id);
+      await refreshWorkflows();
+      toast.success("Workflow undeployed");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Undeploy failed");
+    } finally {
+      setActingWorkflowId(null);
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this draft workflow? This cannot be undone.")) return;
+    setActingWorkflowId(id);
     try {
       await deleteWorkflow(tenant, id);
       await refreshWorkflows();
+      toast.success("Workflow deleted");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setActingWorkflowId(null);
     }
   };
 
@@ -394,16 +422,46 @@ export default function WorkflowsPage() {
                   <div className="flex items-center gap-3">
                     {!wf.deployed && (
                       <>
-                        <button onClick={() => handleDeploy(wf.id)} className="text-xs hover:underline" style={{ color: "#86efac" }}>Deploy</button>
-                        <button onClick={() => handleDelete(wf.id)} className="text-xs hover:underline flex items-center gap-1" style={{ color: "#f87171" }}>
+                        <button
+                          onClick={() => router.push(`/console/workflows/${wf.id}/edit`)}
+                          disabled={actingWorkflowId === wf.id}
+                          className="text-xs hover:underline disabled:opacity-50"
+                          style={{ color: "#60a5fa" }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeploy(wf.id)}
+                          disabled={actingWorkflowId === wf.id}
+                          className="text-xs hover:underline disabled:opacity-50"
+                          style={{ color: "#86efac" }}
+                        >
+                          Deploy
+                        </button>
+                        <button
+                          onClick={() => handleDelete(wf.id)}
+                          disabled={actingWorkflowId === wf.id}
+                          className="text-xs hover:underline flex items-center gap-1 disabled:opacity-50"
+                          style={{ color: "#f87171" }}
+                        >
                           <Trash2 size={11} /> Delete
                         </button>
                       </>
                     )}
                     {wf.deployed && (
-                      <a href="/console/architect" className="text-xs hover:underline flex items-center gap-1" style={{ color: "#60a5fa" }}>
-                        → Architect
-                      </a>
+                      <>
+                        <button
+                          onClick={() => handleUndeploy(wf.id)}
+                          disabled={actingWorkflowId === wf.id}
+                          className="text-xs hover:underline disabled:opacity-50"
+                          style={{ color: "#fbbf24" }}
+                        >
+                          Undeploy
+                        </button>
+                        <a href="/console/architect" className="text-xs hover:underline flex items-center gap-1" style={{ color: "#60a5fa" }}>
+                          → Architect
+                        </a>
+                      </>
                     )}
                   </div>
                 </td>

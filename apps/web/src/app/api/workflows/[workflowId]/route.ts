@@ -3,6 +3,13 @@ import { proxyJson } from "../../_utils";
 
 type Params = { params: Promise<{ workflowId: string }> };
 
+export async function PUT(request: NextRequest, { params }: Params) {
+  const { workflowId } = await params;
+  const body = await request.json();
+  const proxied = await proxyJson(`/api/workflows/${workflowId}`, request, "PUT", body);
+  return NextResponse.json(proxied.body, { status: proxied.status });
+}
+
 export async function DELETE(request: NextRequest, { params }: Params) {
   const { workflowId } = await params;
   const proxied = await proxyJson(`/api/workflows/${workflowId}`, request, "DELETE");

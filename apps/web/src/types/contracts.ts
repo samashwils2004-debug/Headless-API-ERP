@@ -1,5 +1,23 @@
 export type StateType = "initial" | "intermediate" | "terminal";
 
+// ── Shared domain types ───────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  institution_id: string;
+  email: string;
+  name: string;
+  role: string;
+}
+
+export interface ProjectItem {
+  id: string;
+  institution_id: string;
+  name: string;
+  slug: string;
+  environment: "test" | "production";
+}
+
 export interface WorkflowTransition {
   to: string;
   condition: string;

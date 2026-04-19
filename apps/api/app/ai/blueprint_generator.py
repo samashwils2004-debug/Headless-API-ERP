@@ -9,11 +9,7 @@ from app.config import get_settings
 from app.core.schema_engine import SchemaEngine
 from app.observability import BLUEPRINT_VALIDATION_FAILURES
 
-try:
-    from app.ai.provider_router import get_provider_router
-    _provider_router_available = True
-except Exception:
-    _provider_router_available = False
+from app.ai.provider_router import get_provider_router
 
 
 class BlueprintGenerator:

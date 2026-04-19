@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 from contextlib import asynccontextmanager
 
@@ -16,6 +17,7 @@ from app.routes import api_keys, templates, architect, runtime
 from app.ws import hub
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 if settings.sentry_dsn:
     import sentry_sdk
@@ -100,6 +102,7 @@ async def metrics_middleware(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     detail = "Internal server error" if not settings.debug else str(exc)
     return JSONResponse(status_code=500, content={"detail": detail})
 

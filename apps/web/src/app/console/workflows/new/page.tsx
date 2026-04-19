@@ -46,10 +46,11 @@ import {
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
+import type { StateType } from "@/types/contracts";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type StateType = "initial" | "intermediate" | "terminal";
+// StateType is imported from @/types/contracts — do not redefine here.
 
 type StateNodeData = {
   label: string;

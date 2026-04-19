@@ -10,6 +10,7 @@ from app.database import get_db
 from app.middleware.api_key_auth import get_runtime_auth_from_request
 from app.models import Application, Workflow
 from app.time_utils import utcnow_naive
+from app.utils import validate_schema_fields
 
 router = APIRouter()
 
@@ -48,32 +49,7 @@ async def submit_application(body: SubmitApplicationRequest, request: Request):
     # Validate applicant_data against embedded schema
     schema = workflow.definition.get("schema", {})
     if schema and schema.get("fields"):
-        errors = []
-        for field_def in schema["fields"]:
-            field_name = field_def["name"]
-            field_type = field_def.get("type", "string")
-            required = field_def.get("required", False)
-            value = body.applicant_data.get(field_name)
-
-            if required and value is None:
-                errors.append(f"Missing required field: {field_name}")
-                continue
-
-            if value is not None:
-                if field_type == "number" and not isinstance(value, (int, float)):
-                    errors.append(f"Field '{field_name}' must be a number")
-                elif field_type == "string" and not isinstance(value, str):
-                    errors.append(f"Field '{field_name}' must be a string")
-
-                if field_def.get("min") is not None and isinstance(value, (int, float)):
-                    if value < field_def["min"]:
-                        errors.append(f"Field '{field_name}' below minimum {field_def['min']}")
-                if field_def.get("max") is not None and isinstance(value, (int, float)):
-                    if value > field_def["max"]:
-                        errors.append(f"Field '{field_name}' above maximum {field_def['max']}")
-                if field_def.get("enum") and value not in field_def["enum"]:
-                    errors.append(f"Field '{field_name}' must be one of {field_def['enum']}")
-
+        errors = validate_schema_fields(body.applicant_data, schema["fields"])
         if errors:
             raise HTTPException(status_code=422, detail={"validation_errors": errors})
 

@@ -16,7 +16,7 @@
 // and then sends them in the headers as X-Institution-Id and X-Project-Id (attaching CSRF token from the cookie)
 
 import { assertTenantContext } from "@/lib/enforcement/tenantGuard";
-import type { DomainEvent, InstitutionalBlueprint, ValidationResult, WorkflowDefinition } from "@/types/contracts";
+import type { AuthUser, DomainEvent, InstitutionalBlueprint, ProjectItem, ValidationResult, WorkflowDefinition } from "@/types/contracts";
 
 export type TenantContext = {
   institutionId: string;
@@ -114,7 +114,7 @@ async function parse<T>(response: Response): Promise<T> {
 
 export async function getCurrentUser() {
   const response = await fetch("/api/auth/me", { cache: "no-store" });
-  return parse<{ id: string; institution_id: string; email: string; name: string; role: string }>(response);
+  return parse<AuthUser>(response);
 }
 
 export async function listProjects(tenant: TenantContext) {
@@ -122,7 +122,7 @@ export async function listProjects(tenant: TenantContext) {
     cache: "no-store",
     headers: headersForTenant(tenant),
   });
-  return parse<{ projects: Array<{ id: string; institution_id: string; name: string; slug: string; environment: "test" | "production" }> }>(response);
+  return parse<{ projects: ProjectItem[] }>(response);
 }
 
 export async function createProject(tenant: TenantContext, payload: { name: string; slug: string; environment: "test" | "production" }) {
@@ -163,8 +163,29 @@ export async function createWorkflow(
   return parse<WorkflowItem>(response);
 }
 
+export async function updateWorkflow(
+  tenant: TenantContext,
+  workflowId: string,
+  payload: { name: string; definition: Record<string, unknown>; is_ai_generated: boolean }
+) {
+  const response = await fetch(`/api/workflows/${workflowId}`, {
+    method: "PUT",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify(payload),
+  });
+  return parse<WorkflowItem>(response);
+}
+
 export async function deployWorkflow(tenant: TenantContext, workflowId: string) {
   const response = await fetch(`/api/workflows/${workflowId}/deploy`, {
+    method: "POST",
+    headers: headersForTenant(tenant, { "Content-Type": "application/json" }),
+  });
+  return parse<WorkflowItem>(response);
+}
+
+export async function undeployWorkflow(tenant: TenantContext, workflowId: string) {
+  const response = await fetch(`/api/workflows/${workflowId}/undeploy`, {
     method: "POST",
     headers: headersForTenant(tenant, { "Content-Type": "application/json" }),
   });

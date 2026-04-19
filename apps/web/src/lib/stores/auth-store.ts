@@ -2,13 +2,10 @@
 
 import { create } from "zustand";
 
-export type AuthUser = {
-  id: string;
-  institution_id: string;
-  email: string;
-  name: string;
-  role: string;
-};
+import type { AuthUser } from "@/types/contracts";
+
+// Re-export so existing imports from this module continue to work.
+export type { AuthUser };
 
 type AuthState = {
   user: AuthUser | null;
