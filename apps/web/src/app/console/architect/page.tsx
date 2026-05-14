@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Eye,
   PenTool,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -80,7 +81,7 @@ export default function ArchitectPage() {
   const [selectedWorkflowIds, setSelectedWorkflowIds] = useState<string[]>([]);
   const [keyName, setKeyName] = useState("Default API Key");
   const [complianceTags, setComplianceTags] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"graph" | "preview">("graph");
+  const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup">("graph");
   const [designSpec, setDesignSpec] = useState<DesignSpec | null>(null);
   const [generatingDesign, setGeneratingDesign] = useState(false);
 
@@ -111,8 +112,8 @@ export default function ArchitectPage() {
         generateERPDesign({ institutionId: context.institutionId, projectId: context.projectId }, a.id)
           .then((res) => {
             setDesignSpec(res.design_spec);
-            setViewMode("preview");
-            toast.success("ERP design generated");
+            setViewMode("mockup");
+            toast.success("ERP mockup generated");
           })
           .catch(() => {})
           .finally(() => setGeneratingDesign(false));
@@ -257,6 +258,18 @@ export default function ArchitectPage() {
             <Eye size={12} />
             Preview
           </button>
+          <button
+            onClick={() => setViewMode("mockup")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+            style={
+              viewMode === "mockup"
+                ? { background: "#10b98120", color: "#34d399" }
+                : { background: "transparent", color: "#71717a" }
+            }
+          >
+            <Layers size={12} />
+            Mockup
+          </button>
         </div>
 
         {arch && (
@@ -266,18 +279,26 @@ export default function ArchitectPage() {
         )}
       </div>
 
-      {viewMode === "preview" ? (
+      {viewMode === "mockup" ? (
         designSpec ? (
           <ERPDesign spec={designSpec} />
         ) : (arch?.visualization_config as Record<string, unknown>)?.design_spec ? (
           <ERPDesign spec={(arch!.visualization_config as Record<string, unknown>).design_spec as DesignSpec} />
-        ) : arch?.visualization_config && Object.keys(arch.visualization_config).length > 0 ? (
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
+            <Layers size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
+            <p className="text-sm" style={{ color: "#71717a" }}>No mockup generated yet.</p>
+            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Link workflows to domains, then click Generate ERP Mockup.</p>
+          </div>
+        )
+      ) : viewMode === "preview" ? (
+        arch?.visualization_config && Object.keys(arch.visualization_config).length > 0 ? (
           <ERPPreview config={arch.visualization_config as VisualizationConfig} />
         ) : (
           <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
             <Eye size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
-            <p className="text-sm" style={{ color: "#71717a" }}>No design generated yet.</p>
-            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Link workflows to domains, then click Generate ERP Design.</p>
+            <p className="text-sm" style={{ color: "#71717a" }}>No preview available yet.</p>
+            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Add domains and apply a prompt to generate the ERP preview.</p>
           </div>
         )
       ) : (
@@ -509,8 +530,8 @@ export default function ArchitectPage() {
                   try {
                     const res = await generateERPDesign(tenant, arch.id);
                     setDesignSpec(res.design_spec);
-                    setViewMode("preview");
-                    toast.success("ERP design generated");
+                    setViewMode("mockup");
+                    toast.success("ERP mockup generated");
                   } catch (err) {
                     toast.error(err instanceof Error ? err.message : "Design generation failed");
                   } finally {
@@ -519,14 +540,14 @@ export default function ArchitectPage() {
                 }}
                 disabled={generatingDesign || availableWorkflows.length === 0}
                 className="w-full flex items-center justify-center gap-2 rounded px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 mt-2"
-                style={{ background: "#8b5cf6", color: "#fff" }}
+                style={{ background: "#10b981", color: "#fff" }}
               >
                 {generatingDesign ? (
                   <Loader2 size={13} className="animate-spin" />
                 ) : (
-                  <Eye size={13} />
+                  <Layers size={13} />
                 )}
-                {generatingDesign ? "Generating design\u2026" : "Generate ERP Design"}
+                {generatingDesign ? "Generating mockup\u2026" : "Generate ERP Mockup"}
               </button>
             </div>
           ) : (

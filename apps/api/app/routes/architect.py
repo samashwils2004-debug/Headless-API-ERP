@@ -555,7 +555,8 @@ class DesignRequest(BaseModel):
 
 
 _ERP_DESIGN_SYSTEM_PROMPT = """You are an ERP design architect for Orquestra.
-Given a domain graph and deployed workflow schemas, produce a JSON ERP design spec.
+Given a domain graph and deployed workflow schemas, produce a JSON ERP design spec
+that will render as a fully interactive ERP application mockup.
 
 Output ONLY valid JSON with this exact structure:
 {
@@ -571,7 +572,13 @@ Output ONLY valid JSON with this exact structure:
       "primary_entity": "string",
       "fields": [{"name": "string", "type": "string", "label": "string"}],
       "actions": ["string"],
-      "nav_position": number
+      "nav_position": number,
+      "stats": [
+        {"label": "string", "value": "string", "trend": "up|down|flat"}
+      ],
+      "table_columns": [
+        {"key": "string", "label": "string", "type": "text|number|badge|date", "badge_values": ["string"]}
+      ]
     }
   ],
   "relationships": [
@@ -583,7 +590,7 @@ Output ONLY valid JSON with this exact structure:
     }
   ],
   "nav_groups": [{"label": "string", "module_ids": ["string"]}],
-  "layout": "sidebar_nav|top_nav",
+  "layout": "sidebar_nav",
   "rationale": "string"
 }
 
@@ -593,6 +600,12 @@ Rules:
 - Actions come from the workflow states (e.g. Submit, Approve, Reject)
 - Relationships come from domain integrations
 - nav_position is 1-based ordering
+- stats: exactly 4 KPI cards per module with realistic institutional values
+  (e.g. "1,247", "89%", "$2.4M", "342"). Include a trend direction.
+- table_columns: 4-6 columns per module describing the data table.
+  Use type "badge" for status columns and provide badge_values matching workflow states
+  (e.g. ["Submitted", "Under Review", "Approved", "Rejected"]).
+  Use type "date" for timestamps, "number" for numeric fields, "text" for everything else.
 - Return ONLY the JSON, no markdown"""
 
 

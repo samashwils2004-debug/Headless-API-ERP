@@ -487,6 +487,13 @@ export type DesignSpec = {
     fields: Array<{ name: string; type: string; label: string }>;
     actions: string[];
     nav_position: number;
+    stats?: Array<{ label: string; value: string; trend: "up" | "down" | "flat" }>;
+    table_columns?: Array<{
+      key: string;
+      label: string;
+      type: "text" | "number" | "badge" | "date";
+      badge_values?: string[];
+    }>;
   }>;
   relationships: Array<{
     from_module: string;
