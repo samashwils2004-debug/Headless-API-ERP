@@ -25,6 +25,12 @@ If you prefer starting from `apps/web`, use:
 npm run dev:stack
 ```
 
+## Vercel Deployment
+
+Deploy the frontend as a monorepo project with `apps/web` set as the Vercel Root Directory.
+
+The deployment config for the web app lives in `apps/web/vercel.json`, so Vercel installs and builds from the frontend package itself rather than guessing from the repo root.
+
 Demo login:
 
 - Email: `owner@demo.edu`
