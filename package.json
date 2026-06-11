@@ -15,9 +15,7 @@
     "api:test": "python -m pytest apps/api/tests",
     "api:seed": "python apps/api/seed_demo.py"
   },
-  "dependencies": {
-    "psql": "^0.0.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "concurrently": "^9.2.1"
   }
