@@ -828,5 +828,5 @@ def delete_domain(
         "version": arch.version,
         "diff": {"summary": diff_summary},
         "visualization_config": arch.visualization_config,
-    } 
+    }
     
