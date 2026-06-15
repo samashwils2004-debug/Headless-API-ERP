@@ -50,3 +50,5 @@ frontend-next/
 archive/
 .vercel
 .env*
+
+/generated/prisma
