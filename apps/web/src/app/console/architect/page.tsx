@@ -213,14 +213,16 @@ export default function ArchitectPage() {
     try {
       const res = await generateStitchMockup(tenant, {
         system_name: arch.name,
-        domains: domains.map((d) => ({
+        modules: domains.map((d) => ({
           id: d.id,
           label: d.label,
           color: d.color ?? undefined,
           workflow_name: d.workflow_name ?? undefined,
         })),
-        stitch_project_id: stitchProjectId ?? undefined,
-      });
+
+        architecture_version_id: (arch as any).versionId || (arch as any).id || "1", 
+        stitch_project_id: (typeof stitchProjectId !== 'undefined' ? stitchProjectId : undefined),
+      } as any); 
       setStitchProjectId(res.project_id);
       setStitchScreens(res.screens);
       setViewMode("stitch");

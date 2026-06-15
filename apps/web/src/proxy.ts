@@ -1,13 +1,12 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ─── Auth Guard ────────────────────────────────────────────────────────────
+  // 1. Auth Guard (Redirects)
   const accessToken = request.cookies.get("access_token")?.value;
 
-  // Redirect unauthenticated users away from the console
   if (pathname.startsWith("/console")) {
     if (!accessToken) {
       const loginUrl = new URL("/login", request.url);
@@ -16,14 +15,27 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Redirect already-authenticated users away from the login page
   if (pathname === "/login" && accessToken) {
     return NextResponse.redirect(new URL("/console", request.url));
   }
 
-  // ─── Security Headers ──────────────────────────────────────────────────────
-  const response = NextResponse.next();
+  // Initialize the response for modifications
+  const response = NextResponse.next
+();
 
+  // 2. CSRF Token Logic (Runs on /console and /api routes)
+  if (pathname.startsWith("/console") || pathname.startsWith("/api")) {
+    if (!request.cookies.get("csrf_token")) {
+      const token = randomBytes(24).toString("base64url");
+      response.cookies.set("csrf_token", token, {
+        httpOnly: false, // Must be JS-readable so headersForTenant can read it
+        sameSite: "lax",
+        path: "/",
+      });
+    }
+  }
+
+  // 3. Security Headers
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "";
   const wsBase = process.env.NEXT_PUBLIC_WS_BASE_URL || apiBase.replace(/^http/, "ws");
   const connectSrc = ["'self'", apiBase, wsBase].filter(Boolean).join(" ");
@@ -53,6 +65,7 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
+// Global matcher to intercept all page assets and api paths cleanly
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
