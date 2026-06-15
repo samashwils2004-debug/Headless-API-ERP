@@ -43,14 +43,15 @@ export function proxy(request: NextRequest) {
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://googleapis.com", // Added Google Fonts CSS
     "img-src 'self' data: https:",
-    "font-src 'self' data: https:",
+    "font-src 'self' data: https: https://gstatic.com",       // Added Google Fonts Assets
     `connect-src ${connectSrc}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
   ].join("; ");
+
 
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("X-Content-Type-Options", "nosniff");
