@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+﻿from app.models import ArchWorkflow, Workflow
 
 import logging
 from datetime import datetime
@@ -217,5 +217,7 @@ def delete_workflow(
         raise HTTPException(status_code=404, detail="Workflow not found")
     if workflow.deployed:
         raise HTTPException(status_code=409, detail="Deployed workflows cannot be deleted")
+
+    db.query(ArchWorkflow).filter(ArchWorkflow.workflow_id == workflow.id).delete()
     db.delete(workflow)
     db.commit()

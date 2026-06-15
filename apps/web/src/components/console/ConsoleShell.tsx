@@ -17,6 +17,7 @@ import {
 
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useProjectStore } from "@/lib/stores/project-store";
+import { useAuthStore } from "@/lib/stores/auth-store";
 
 const NAV = [
   { href: "/console", label: "Dashboard", icon: LayoutDashboard },
@@ -34,7 +35,8 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const context = useProjectContextStore((s) => s.context);
   const setContext = useProjectContextStore((s) => s.setContext);
   const projects = useProjectStore((s) => s.projects);
-
+  const user = useAuthStore((s) => s.user);
+  
   return (
     <div className="min-h-screen flex" style={{ background: "#0f0f12", color: "#f4f4f5" }}>
       {/* Sidebar 260px */}

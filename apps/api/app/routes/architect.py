@@ -10,7 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-
+from app.ai.erp_agent_evaluator import get_erp_agent_evaluator
 from app.ai.architect.erp_schema import ERP_SYSTEM_PROMPT
 from app.ai.architect.nlp_intent_parser import NLPIntentParser
 from app.ai.architect.prompt_factory import ERPPromptFactory
@@ -680,6 +680,74 @@ async def generate_design(
         "is_mock": response["is_mock"],
     }
 
+@router.post("/architect/{arch_id}/generate-design")
+async def generate_design(
+    arch_id: str,
+    body: DesignRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
+):
+    """Use multi-agent pipeline to generate and validate ERP design spec."""
+    arch = _get_arch_or_404(arch_id, tenant, db)
+    domains = arch.graph_json.get("erp_system", {}).get("domains", [])
+
+    # Build context for agents
+    workflow_schemas = []
+    for domain in domains:
+        wf_id = domain.get("workflow_id")
+        if not wf_id:
+            continue
+        wf = db.query(Workflow).filter(
+            Workflow.id == wf_id,
+            Workflow.institution_id == tenant.institution_id,
+        ).first()
+        if wf and wf.definition:
+            schema = wf.definition.get("schema", {})
+            states = list(wf.definition.get("states", {}).keys())
+            workflow_schemas.append({
+                "domain_id": domain["id"],
+                "domain_label": domain.get("label", domain["id"]),
+                "workflow_name": wf.name,
+                "schema_fields": schema.get("fields", []),
+                "states": states,
+                "color": domain.get("color"),
+            })
+
+    context = {
+        "system_name": arch.name,
+        "domains": [
+            {"id": d["id"], "label": d.get("label", d["id"])}
+            for d in domains
+        ],
+        "integrations": arch.graph_json.get("erp_system", {}).get("integrations", []),
+        "workflow_schemas": workflow_schemas,
+    }
+
+    # Run multi-agent pipeline
+    evaluator = get_erp_agent_evaluator()
+    result = await evaluator.generate(context)
+
+    design_spec = result["spec"]
+
+    # Persist to architecture
+    arch.visualization_config = {
+        **(arch.visualization_config or {}),
+        "design_spec": design_spec,
+        "design_generated_at": utcnow_naive().isoformat(),
+        "provider_used": result["provider"],
+        "reviewer_changes": result.get("reviewer_changes", []),
+    }
+    db.commit()
+
+    return {
+        "design_spec": design_spec,
+        "provider_used": result["provider"],
+        "reviewer_status": result.get("reviewer_status", "fallback"),
+        "reviewer_changes": result.get("reviewer_changes", []),
+        "is_mock": result["provider"] == "fallback",
+    }
 
 @router.get("/architect/{arch_id}/available-workflows")
 def available_workflows(
@@ -711,3 +779,54 @@ def available_workflows(
             for w in workflows
         ]
     }
+
+class DeleteDomainRequest(BaseModel):
+    domain_id: str
+
+@router.delete("/architect/{arch_id}/domains/{domain_id}", status_code=200)
+def delete_domain(
+    arch_id: str,
+    domain_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
+):
+    """Delete a domain from architecture"""
+    arch = _get_arch_or_404(arch_id, tenant, db)
+    
+    old_graph = copy.deepcopy(arch.graph_json)
+    new_graph = _apply_operation(arch.graph_json, {
+        "operation": "delete_domain",
+        "domain_id": {"id": domain_id},
+        "rationale": f"Domain '{domain_id}' deleted by user {current_user.username}",
+    })
+
+    arch.graph_json = new_graph
+    arch.version += 1
+    arch.updated_at = utcnow_naive()
+
+    # Record version
+    diff_summary = _compute_diff_summary(old_graph, new_graph)
+    version_record = ArchitectureVersion(
+        architecture_id=arch.id,
+        version=arch.version,
+        prompt=f"Deleted domain: {domain_id}",
+        graph_snapshot=new_graph,
+        diff_summary=diff_summary,
+    )
+    db.add(version_record)
+
+    # Regenerate visualization
+    linked = _linked_workflows(arch)
+    arch.visualization_config = _viz_generator.generate(new_graph, linked)
+
+    db.commit()
+
+    return {
+        "graph": new_graph,
+        "version": arch.version,
+        "diff": {"summary": diff_summary},
+        "visualization_config": arch.visualization_config,
+    } 
+    

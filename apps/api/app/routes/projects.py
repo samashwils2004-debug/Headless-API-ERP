@@ -1,6 +1,4 @@
-﻿from __future__ import annotations
-
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -68,6 +66,48 @@ def delete_project(
             detail="Cannot delete a project with deployed workflows. Undeploy or delete all workflows first.",
         )
 
+    # Clean up in dependency order to avoid FK violations
+    from app.models import (
+        ArchWorkflow, ArchitectureVersion, InstitutionArchitecture,
+        BlueprintProposal, Application, Event, TemplateCustomization,
+        APIKey,
+    )
+
+    # 1. Get architecture versions to clean up arch_workflows
+    arch = db.query(InstitutionArchitecture).filter(
+        InstitutionArchitecture.project_id == project_id
+    ).first()
+    if arch:
+        versions = db.query(ArchitectureVersion).filter(
+            ArchitectureVersion.architecture_id == arch.id
+        ).all()
+        for v in versions:
+            db.query(ArchWorkflow).filter(
+                ArchWorkflow.architecture_version_id == v.id
+            ).delete()
+        db.query(ArchitectureVersion).filter(
+            ArchitectureVersion.architecture_id == arch.id
+        ).delete()
+        db.delete(arch)
+
+    # 2. Clean up remaining references
+    db.query(TemplateCustomization).filter(
+        TemplateCustomization.project_id == project_id
+    ).delete()
+    db.query(BlueprintProposal).filter(
+        BlueprintProposal.project_id == project_id
+    ).delete()
+    db.query(Application).filter(
+        Application.project_id == project_id
+    ).delete()
+    db.query(Event).filter(
+        Event.project_id == project_id
+    ).delete()
+    db.query(APIKey).filter(
+        APIKey.project_id == project_id
+    ).delete()
+
+    # 3. Delete the project
     db.delete(project)
     db.commit()
 

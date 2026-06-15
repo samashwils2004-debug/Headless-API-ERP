@@ -48,3 +48,5 @@ frontend-next/
 
 # Archived legacy copy
 archive/
+.vercel
+.env*

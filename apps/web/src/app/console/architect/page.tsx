@@ -1,7 +1,3 @@
-// calls /api/ai/compile to generate blueprints, etc
-// calls getCsrfToken() manually from the cookie for ts direct fetch calls
-// connects to /api/ai/compile (same endpoint as console-api.ts)
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -21,6 +17,8 @@ import {
   Eye,
   PenTool,
   Layers,
+  Sparkles,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -31,15 +29,22 @@ import {
   compileArchitecture,
   linkWorkflowToDomain,
   generateERPDesign,
+  generateStitchMockup,
   type ArchitectureItem,
   type ArchitectureVersionItem,
   type DesignSpec,
+  type StitchScreenMap,
 } from "@/lib/console-api";
+import { StitchDesign } from "@/components/console/StitchDesign";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 import type { DomainDef, ERPDomainGraph } from "@/types/contracts";
 import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
 import { ERPDesign } from "@/components/console/ERPDesign";
+
+// calls /api/ai/compile to generate blueprints, etc
+// calls getCsrfToken() manually from the cookie for ts direct fetch calls
+// connects to /api/ai/compile (same endpoint as console-api.ts)
 
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
@@ -81,9 +86,12 @@ export default function ArchitectPage() {
   const [selectedWorkflowIds, setSelectedWorkflowIds] = useState<string[]>([]);
   const [keyName, setKeyName] = useState("Default API Key");
   const [complianceTags, setComplianceTags] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup">("graph");
+  const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup" | "stitch">("graph");
   const [designSpec, setDesignSpec] = useState<DesignSpec | null>(null);
   const [generatingDesign, setGeneratingDesign] = useState(false);
+  const [stitchScreens, setStitchScreens] = useState<StitchScreenMap | null>(null);
+  const [generatingStitch, setGeneratingStitch] = useState(false);
+  const [stitchProjectId, setStitchProjectId] = useState<string | null>(null);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -199,6 +207,64 @@ export default function ArchitectPage() {
     }
   }
 
+  async function handleGenerateStitch() {
+    if (!arch) return;
+    setGeneratingStitch(true);
+    try {
+      const res = await generateStitchMockup(tenant, {
+        system_name: arch.name,
+        domains: domains.map((d) => ({
+          id: d.id,
+          label: d.label,
+          color: d.color ?? undefined,
+          workflow_name: d.workflow_name ?? undefined,
+        })),
+        stitch_project_id: stitchProjectId ?? undefined,
+      });
+      setStitchProjectId(res.project_id);
+      setStitchScreens(res.screens);
+      setViewMode("stitch");
+      toast.success(
+        `Stitch UI generated for ${Object.keys(res.screens).length} domain(s).`
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Stitch generation failed."
+      );
+    } finally {
+      setGeneratingStitch(false);
+    }
+  }
+
+  async function handleDeleteDomain(domainId: string, domainLabel: string) {
+    if (!arch) return;
+    if (!confirm(`Delete domain "${domainLabel}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(
+        `/api/architect/${arch.id}/domains/${domainId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "X-Institution-Id": context.institutionId,
+            "X-Project-Id": context.projectId,
+            "X-CSRF-Token": document.cookie
+              .split("; ")
+              .find((r) => r.startsWith("csrf_token="))
+              ?.split("=")[1] || "",
+          },
+        }
+      );
+      if (!res.ok) throw new Error("Failed to delete domain");
+      const data = await res.json();
+      setArch((prev) =>
+        prev ? { ...prev, graph_json: data.graph, version: data.version } : prev
+      );
+      toast.success(`Domain "${domainLabel}" deleted`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete domain");
+    }
+  }
+
   const domains: DomainDef[] = (arch?.graph_json as ERPDomainGraph | undefined)?.erp_system?.domains ?? [];
 
   if (noProject) {
@@ -270,6 +336,18 @@ export default function ArchitectPage() {
             <Layers size={12} />
             Mockup
           </button>
+          <button
+            onClick={() => setViewMode("stitch")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+            style={
+              viewMode === "stitch"
+                ? { background: "#14b8a620", color: "#2dd4bf" }
+                : { background: "transparent", color: "#71717a" }
+            }
+          >
+            <Sparkles size={12} />
+            Stitch
+          </button>
         </div>
 
         {arch && (
@@ -279,7 +357,26 @@ export default function ArchitectPage() {
         )}
       </div>
 
-      {viewMode === "mockup" ? (
+      {viewMode === "stitch" ? (
+        stitchScreens && Object.keys(stitchScreens).length > 0 ? (
+          <StitchDesign
+            screens={stitchScreens}
+            domains={domains}
+            systemName={arch?.name ?? "Institutional ERP"}
+          />
+        ) : (
+          <div
+            className="flex flex-col items-center justify-center h-64 rounded-lg border"
+            style={{ background: "#141418", borderColor: "#25252b" }}
+          >
+            <Sparkles size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
+            <p className="text-sm" style={{ color: "#71717a" }}>No Stitch UI generated yet.</p>
+            <p className="text-xs mt-1" style={{ color: "#52525b" }}>
+              Click "Generate Stitch UI" in the sidebar to create screens.
+            </p>
+          </div>
+        )
+      ) : viewMode === "mockup" ? (
         designSpec ? (
           <ERPDesign spec={designSpec} />
         ) : (arch?.visualization_config as Record<string, unknown>)?.design_spec ? (
@@ -403,8 +500,18 @@ export default function ArchitectPage() {
                             {domain.workflow_id ? "linked" : "link"}
                           </button>
                         )}
+                        <button
+                          onClick={() => handleDeleteDomain(domain.id, domain.label)}
+                          className="shrink-0 flex items-center gap-1 rounded px-2 py-0.5 text-xs border transition-colors"
+                          style={{
+                            borderColor: "#ef4444",
+                            color: "#ef4444",
+                            background: "transparent"
+                          }}
+                        >
+                          <Trash2 size={10} />
+                        </button>
                       </div>
-
                       {domain.workflow_name && (
                         <p className="mt-1.5 text-xs truncate" style={{ color: "#4ade80" }}>
                           → {domain.workflow_name}
@@ -549,6 +656,23 @@ export default function ArchitectPage() {
                 )}
                 {generatingDesign ? "Generating mockup\u2026" : "Generate ERP Mockup"}
               </button>
+              {/* ── Google Stitch UI generation ───────────────────── */}
+              <button
+                onClick={handleGenerateStitch}
+                disabled={generatingStitch || domains.length === 0}
+                className="w-full flex items-center justify-center gap-2 rounded px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 mt-2"
+                style={{ background: "#0d9488", color: "#fff" }}
+              >
+                {generatingStitch ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Sparkles size={13} />
+                )}
+                {generatingStitch ? "Generating Stitch UI\u2026" : "Generate Stitch UI"}
+              </button>
+              <p className="text-[10px] mt-1 text-center" style={{ color: "#3f3f46" }}>
+                Uses Google Stitch · 1 generation per domain
+              </p>
             </div>
           ) : (
             /* API Key result */

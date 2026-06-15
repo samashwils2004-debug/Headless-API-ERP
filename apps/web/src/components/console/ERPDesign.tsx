@@ -92,7 +92,7 @@ function deriveStats(mod: DesignSpec["modules"][number]): Array<{ label: string;
   ];
 }
 
-// ── Badge color mapping ───────────────────────���─────────────────
+// ── Badge color mapping ───────────────────────────────────────
 const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   approved: { bg: "#16a34a20", text: "#4ade80" },
   active: { bg: "#16a34a20", text: "#4ade80" },
@@ -145,9 +145,22 @@ const ROWS_PER_PAGE = 8;
 // ── Main component ──────────────────────────────────────────────
 export function ERPDesign({ spec }: { spec: DesignSpec }) {
   const sorted = useMemo(
-    () => [...(spec.modules || [])].sort((a, b) => a.nav_position - b.nav_position),
-    [spec.modules]
+    () => [...(spec?.modules ?? [])].sort((a, b) => 
+      (a.nav_position ?? 0) - (b.nav_position ?? 0)
+    ),
+    [spec?.modules]
   );
+
+  if (!spec || !spec.modules || spec.modules.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 rounded-lg border"
+           style={{ background: "#141418", borderColor: "#25252b" }}>
+        <p className="text-sm" style={{ color: "#52525b" }}>
+          No ERP mockup available. Link workflows and click Generate ERP Mockup.
+        </p>
+      </div>
+    );
+  }
   const [activeId, setActiveId] = useState(sorted[0]?.id ?? "");
   const [page, setPage] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

@@ -6,6 +6,7 @@ const nextConfig = {
   turbopack: {
     root: path.resolve(__dirname, "..", ".."),
   },
+  serverExternalPackages: ["@google/stitch-sdk"],
 };
 
 module.exports = nextConfig;

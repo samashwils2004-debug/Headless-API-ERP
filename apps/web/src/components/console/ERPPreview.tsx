@@ -29,11 +29,22 @@ type VisualizationConfig = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function ERPPreview({ config }: { config: VisualizationConfig }) {
+  if (!config || !config.sections || config.sections.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 rounded-lg border" 
+           style={{ background: "#141418", borderColor: "#25252b" }}>
+        <p className="text-sm" style={{ color: "#52525b" }}>
+          No preview available yet. Add domains and apply a prompt.
+        </p>
+      </div>
+    );
+  }
+
   const gridClass = {
     two_column: "grid-cols-1 md:grid-cols-2",
     four_grid: "grid-cols-2 md:grid-cols-4",
     masonry: "grid-cols-2 md:grid-cols-3",
-  }[config.layout_mode];
+  }[config.layout_mode] ?? "grid-cols-2 md:grid-cols-3";  // fallback
 
   return (
     <div className="space-y-6">
