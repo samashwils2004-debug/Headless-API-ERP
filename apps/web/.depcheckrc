@@ -1,0 +1,12 @@
+{
+  "ignores": [],
+  "ignoreDirs": [
+    ".next",
+    "node_modules",
+    ".cache"
+  ],
+  "parsers": {
+    "*.ts": ["typescript"],
+    "*.tsx": ["typescript"]
+  }
+}

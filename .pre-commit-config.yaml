@@ -1,0 +1,56 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: detect-private-key
+
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+        args: ['--line-length=100']
+        files: ^apps/api/
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        files: ^apps/api/
+        args: ['--max-line-length=100', '--max-complexity=10']
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        files: ^apps/api/
+        additional_dependencies: ['types-all']
+        args: ['--ignore-missing-imports']
+
+  - repo: local
+    hooks:
+      - id: radon-complexity
+        name: Radon Cyclomatic Complexity
+        entry: radon cc --min C -s
+        language: python
+        files: ^apps/api/.*\.py$
+        pass_filenames: true
+
+      - id: eslint
+        name: ESLint
+        entry: npx eslint
+        language: node
+        files: ^apps/web/src/.*\.(ts|tsx)$
+        args: ['--max-warnings=0']
+
+      - id: tsc
+        name: TypeScript Check
+        entry: sh -c 'cd apps/web && npx tsc --noEmit'
+        language: system
+        pass_filenames: false
+        always_run: false

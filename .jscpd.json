@@ -1,0 +1,15 @@
+{
+  "threshold": 5,
+  "reporters": ["console", "json"],
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/alembic/versions/**",
+    "**/__pycache__/**"
+  ],
+  "languages": ["typescript", "python"],
+  "minTokens": 50,
+  "output": "./jscpd-report"
+}

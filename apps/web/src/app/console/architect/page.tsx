@@ -14,11 +14,10 @@ import {
   ChevronRight,
   Key,
   RefreshCw,
-  Eye,
   PenTool,
   Layers,
-  Sparkles,
-  Trash2
+  Trash2,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,18 +28,15 @@ import {
   compileArchitecture,
   linkWorkflowToDomain,
   generateERPDesign,
-  generateStitchMockup,
   type ArchitectureItem,
   type ArchitectureVersionItem,
   type DesignSpec,
-  type StitchScreenMap,
 } from "@/lib/console-api";
-import { StitchDesign } from "@/components/console/StitchDesign";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 import type { DomainDef, ERPDomainGraph } from "@/types/contracts";
-import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
 import { ERPDesign } from "@/components/console/ERPDesign";
+import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
 
 // calls /api/ai/compile to generate blueprints, etc
 // calls getCsrfToken() manually from the cookie for ts direct fetch calls
@@ -86,12 +82,9 @@ export default function ArchitectPage() {
   const [selectedWorkflowIds, setSelectedWorkflowIds] = useState<string[]>([]);
   const [keyName, setKeyName] = useState("Default API Key");
   const [complianceTags, setComplianceTags] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup" | "stitch">("graph");
+  const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup">("graph");
   const [designSpec, setDesignSpec] = useState<DesignSpec | null>(null);
   const [generatingDesign, setGeneratingDesign] = useState(false);
-  const [stitchScreens, setStitchScreens] = useState<StitchScreenMap | null>(null);
-  const [generatingStitch, setGeneratingStitch] = useState(false);
-  const [stitchProjectId, setStitchProjectId] = useState<string | null>(null);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -207,37 +200,6 @@ export default function ArchitectPage() {
     }
   }
 
-  async function handleGenerateStitch() {
-    if (!arch) return;
-    setGeneratingStitch(true);
-    try {
-      const res = await generateStitchMockup(tenant, {
-        system_name: arch.name,
-        modules: domains.map((d) => ({
-          id: d.id,
-          label: d.label,
-          color: d.color ?? undefined,
-          workflow_name: d.workflow_name ?? undefined,
-        })),
-
-        architecture_version_id: (arch as any).versionId || (arch as any).id || "1", 
-        stitch_project_id: (typeof stitchProjectId !== 'undefined' ? stitchProjectId : undefined),
-      } as any); 
-      setStitchProjectId(res.project_id);
-      setStitchScreens(res.screens);
-      setViewMode("stitch");
-      toast.success(
-        `Stitch UI generated for ${Object.keys(res.screens).length} domain(s).`
-      );
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Stitch generation failed."
-      );
-    } finally {
-      setGeneratingStitch(false);
-    }
-  }
-
   async function handleDeleteDomain(domainId: string, domainLabel: string) {
     if (!arch) return;
     if (!confirm(`Delete domain "${domainLabel}"? This cannot be undone.`)) return;
@@ -319,7 +281,7 @@ export default function ArchitectPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
             style={
               viewMode === "preview"
-                ? { background: "#8b5cf620", color: "#a78bfa" }
+                ? { background: "#f59e0b20", color: "#fbbf24" }
                 : { background: "transparent", color: "#71717a" }
             }
           >
@@ -338,18 +300,6 @@ export default function ArchitectPage() {
             <Layers size={12} />
             Mockup
           </button>
-          <button
-            onClick={() => setViewMode("stitch")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
-            style={
-              viewMode === "stitch"
-                ? { background: "#14b8a620", color: "#2dd4bf" }
-                : { background: "transparent", color: "#71717a" }
-            }
-          >
-            <Sparkles size={12} />
-            Stitch
-          </button>
         </div>
 
         {arch && (
@@ -359,23 +309,14 @@ export default function ArchitectPage() {
         )}
       </div>
 
-      {viewMode === "stitch" ? (
-        stitchScreens && Object.keys(stitchScreens).length > 0 ? (
-          <StitchDesign
-            screens={stitchScreens}
-            domains={domains}
-            systemName={arch?.name ?? "Institutional ERP"}
-          />
+      {viewMode === "preview" ? (
+        (arch?.visualization_config as VisualizationConfig | null | undefined)?.sections?.length ? (
+          <ERPPreview config={arch!.visualization_config as VisualizationConfig} />
         ) : (
-          <div
-            className="flex flex-col items-center justify-center h-64 rounded-lg border"
-            style={{ background: "#141418", borderColor: "#25252b" }}
-          >
-            <Sparkles size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
-            <p className="text-sm" style={{ color: "#71717a" }}>No Stitch UI generated yet.</p>
-            <p className="text-xs mt-1" style={{ color: "#52525b" }}>
-              Click "Generate Stitch UI" in the sidebar to create screens.
-            </p>
+          <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
+            <Eye size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
+            <p className="text-sm" style={{ color: "#71717a" }}>No preview available yet.</p>
+            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Apply an NLP prompt to your architecture to generate a live/not-live preview.</p>
           </div>
         )
       ) : viewMode === "mockup" ? (
@@ -388,16 +329,6 @@ export default function ArchitectPage() {
             <Layers size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
             <p className="text-sm" style={{ color: "#71717a" }}>No mockup generated yet.</p>
             <p className="text-xs mt-1" style={{ color: "#52525b" }}>Link workflows to domains, then click Generate ERP Mockup.</p>
-          </div>
-        )
-      ) : viewMode === "preview" ? (
-        arch?.visualization_config && Object.keys(arch.visualization_config).length > 0 ? (
-          <ERPPreview config={arch.visualization_config as VisualizationConfig} />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
-            <Eye size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
-            <p className="text-sm" style={{ color: "#71717a" }}>No preview available yet.</p>
-            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Add domains and apply a prompt to generate the ERP preview.</p>
           </div>
         )
       ) : (
@@ -656,25 +587,8 @@ export default function ArchitectPage() {
                 ) : (
                   <Layers size={13} />
                 )}
-                {generatingDesign ? "Generating mockup\u2026" : "Generate ERP Mockup"}
+                {generatingDesign ? "Generating mockup…" : "Generate ERP Mockup"}
               </button>
-              {/* ── Google Stitch UI generation ───────────────────── */}
-              <button
-                onClick={handleGenerateStitch}
-                disabled={generatingStitch || domains.length === 0}
-                className="w-full flex items-center justify-center gap-2 rounded px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 mt-2"
-                style={{ background: "#0d9488", color: "#fff" }}
-              >
-                {generatingStitch ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Sparkles size={13} />
-                )}
-                {generatingStitch ? "Generating Stitch UI\u2026" : "Generate Stitch UI"}
-              </button>
-              <p className="text-[10px] mt-1 text-center" style={{ color: "#3f3f46" }}>
-                Uses Google Stitch · 1 generation per domain
-              </p>
             </div>
           ) : (
             /* API Key result */

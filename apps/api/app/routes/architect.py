@@ -10,7 +10,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.ai.erp_agent_evaluator import get_erp_agent_evaluator
 from app.ai.architect.erp_schema import ERP_SYSTEM_PROMPT
 from app.ai.architect.nlp_intent_parser import NLPIntentParser
 from app.ai.architect.prompt_factory import ERPPromptFactory
@@ -39,11 +38,55 @@ _intent_parser = NLPIntentParser()
 _prompt_factory = ERPPromptFactory()
 _viz_generator = ERPVisualizationGenerator()
 
-_STOP_WORDS = {
+_NOISE_WORDS = {
     "add", "create", "new", "a", "an", "the", "domain", "domains",
-    "for", "with", "and", "to", "from", "in", "of", "my", "our",
-    "please", "i", "want", "need", "section", "department",
+    "for", "with", "to", "from", "in", "of", "my", "our",
+    "please", "i", "want", "need", "section", "sections",
+    "department", "departments", "module", "modules",
+    "include", "build", "make", "also", "just",
 }
+
+
+import re as _re
+
+
+def _extract_domain_phrases(prompt: str) -> list[tuple[str, str]]:
+    """
+    Parse multi-word domain phrases from natural language input.
+
+    'Add student portal and staff portal' →
+        [('student_portal', 'Student Portal'), ('staff_portal', 'Staff Portal')]
+    'Add financial aid, HR and student records' →
+        [('financial_aid', 'Financial Aid'), ('hr', 'Hr'), ('student_records', 'Student Records')]
+    """
+    # Split on conjunctions and commas to isolate each phrase
+    raw_parts = _re.split(r'\band\b|\bas well as\b|\balso\b|\bplus\b|,', prompt.lower())
+
+    results: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    for part in raw_parts:
+        # Strip punctuation, keep internal spaces
+        words = [
+            w.strip(".,!?;:'\"()")
+            for w in part.strip().split()
+        ]
+        # Remove noise words while preserving the meaningful multi-word sequence
+        meaningful = [
+            w for w in words
+            if w not in _NOISE_WORDS and len(w) > 1 and w.isalpha()
+        ]
+        if not meaningful:
+            continue
+
+        label = " ".join(meaningful).title()
+        domain_id = "_".join(meaningful)
+
+        if domain_id and domain_id not in seen:
+            seen.add(domain_id)
+            results.append((domain_id, label))
+
+    return results if results else [("general", "General")]
 
 
 class CompileRequest(BaseModel):
@@ -84,15 +127,8 @@ def _linked_workflows(arch: InstitutionArchitecture) -> list[dict]:
 
 
 def _extract_domain_ids_from_prompt(prompt: str) -> list[str]:
-    """Extract likely domain names from a natural language prompt using stop-word filtering."""
-    words = prompt.lower().strip().split()
-    candidates = [
-        w.replace(",", "").replace(".", "")
-        for w in words
-        if w.lower().replace(",", "").replace(".", "") not in _STOP_WORDS
-        and len(w) > 2
-    ]
-    return candidates[:5] if candidates else ["general"]
+    # kept for backward-compat; real extraction uses _extract_domain_phrases
+    return [id_ for id_, _ in _extract_domain_phrases(prompt)]
 
 
 def _apply_operation(current_graph: dict, operation: dict) -> dict:
@@ -296,40 +332,47 @@ def apply_prompt(
     from_cache = response["cached"]
     is_mock = response["is_mock"]
 
+    old_graph = copy.deepcopy(arch.graph_json)
+
     if is_mock or not isinstance(raw_result, dict):
-        # Fallback: extract meaningful domain names using stop-word filtering
-        domain_ids = _extract_domain_ids_from_prompt(body.prompt)
+        # Fallback: parse multi-word domain phrases from natural language
+        phrases = _extract_domain_phrases(body.prompt)
         operations = [
             {
                 "operation": "add_domain",
-                "domain": {
-                    "id": domain_id,
-                    "label": domain_id.replace("_", " ").title(),
-                },
-                "rationale": f"Added domain '{domain_id}' based on: {body.prompt[:100]}",
+                "domain": {"id": domain_id, "label": label},
+                "rationale": f"Added domain '{label}' based on: {body.prompt[:100]}",
             }
-            for domain_id in domain_ids
+            for domain_id, label in phrases
         ]
-
-        old_graph = copy.deepcopy(arch.graph_json)
         new_graph = arch.graph_json
         for op in operations:
             new_graph = _apply_operation(new_graph, op)
-
-        diff_summary = _compute_diff_summary(old_graph, new_graph)
         operation = operations[0] if operations else {}
+    elif "operations" in raw_result and isinstance(raw_result.get("operations"), list):
+        # Batch: AI returned multiple operations
+        operations = raw_result["operations"]
+        new_graph = arch.graph_json
+        for op in operations:
+            new_graph = _apply_operation(new_graph, op)
+        operation = operations[0] if operations else {}
+    elif "operation" in raw_result:
+        # Single operation from AI
+        operation = raw_result
+        new_graph = _apply_operation(arch.graph_json, operation)
     else:
-        operation = raw_result if "operation" in raw_result else {
+        # AI returned unrecognised shape — treat full prompt as domain name
+        operation = {
             "operation": "add_domain",
             "domain": {
-                "id": body.prompt.strip().lower().replace(" ", "_")[:20],
-                "label": body.prompt.strip()[:40].title(),
+                "id": body.prompt.strip().lower().replace(" ", "_")[:30],
+                "label": body.prompt.strip()[:50].title(),
             },
             "rationale": str(raw_result)[:200],
         }
-        old_graph = copy.deepcopy(arch.graph_json)
         new_graph = _apply_operation(arch.graph_json, operation)
-        diff_summary = _compute_diff_summary(old_graph, new_graph)
+
+    diff_summary = _compute_diff_summary(old_graph, new_graph)
 
     arch.graph_json = new_graph
     arch.version += 1
@@ -680,75 +723,6 @@ async def generate_design(
         "is_mock": response["is_mock"],
     }
 
-@router.post("/architect/{arch_id}/generate-design")
-async def generate_design(
-    arch_id: str,
-    body: DesignRequest,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    tenant=Depends(get_tenant_context),
-    _=Depends(check_permission("architect:write")),
-):
-    """Use multi-agent pipeline to generate and validate ERP design spec."""
-    arch = _get_arch_or_404(arch_id, tenant, db)
-    domains = arch.graph_json.get("erp_system", {}).get("domains", [])
-
-    # Build context for agents
-    workflow_schemas = []
-    for domain in domains:
-        wf_id = domain.get("workflow_id")
-        if not wf_id:
-            continue
-        wf = db.query(Workflow).filter(
-            Workflow.id == wf_id,
-            Workflow.institution_id == tenant.institution_id,
-        ).first()
-        if wf and wf.definition:
-            schema = wf.definition.get("schema", {})
-            states = list(wf.definition.get("states", {}).keys())
-            workflow_schemas.append({
-                "domain_id": domain["id"],
-                "domain_label": domain.get("label", domain["id"]),
-                "workflow_name": wf.name,
-                "schema_fields": schema.get("fields", []),
-                "states": states,
-                "color": domain.get("color"),
-            })
-
-    context = {
-        "system_name": arch.name,
-        "domains": [
-            {"id": d["id"], "label": d.get("label", d["id"])}
-            for d in domains
-        ],
-        "integrations": arch.graph_json.get("erp_system", {}).get("integrations", []),
-        "workflow_schemas": workflow_schemas,
-    }
-
-    # Run multi-agent pipeline
-    evaluator = get_erp_agent_evaluator()
-    result = await evaluator.generate(context)
-
-    design_spec = result["spec"]
-
-    # Persist to architecture
-    arch.visualization_config = {
-        **(arch.visualization_config or {}),
-        "design_spec": design_spec,
-        "design_generated_at": utcnow_naive().isoformat(),
-        "provider_used": result["provider"],
-        "reviewer_changes": result.get("reviewer_changes", []),
-    }
-    db.commit()
-
-    return {
-        "design_spec": design_spec,
-        "provider_used": result["provider"],
-        "reviewer_status": result.get("reviewer_status", "fallback"),
-        "reviewer_changes": result.get("reviewer_changes", []),
-        "is_mock": result["provider"] == "fallback",
-    }
-
 @router.get("/architect/{arch_id}/available-workflows")
 def available_workflows(
     arch_id: str,
@@ -797,9 +771,9 @@ def delete_domain(
     
     old_graph = copy.deepcopy(arch.graph_json)
     new_graph = _apply_operation(arch.graph_json, {
-        "operation": "delete_domain",
-        "domain_id": {"id": domain_id},
-        "rationale": f"Domain '{domain_id}' deleted by user {current_user.username}",
+        "operation": "remove_domain",
+        "domain": {"id": domain_id},
+        "rationale": f"Domain '{domain_id}' deleted",
     })
 
     arch.graph_json = new_graph

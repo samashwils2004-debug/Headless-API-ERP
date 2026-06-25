@@ -20,7 +20,7 @@ settings = get_settings()
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+async def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -44,7 +44,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+async def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     exists = db.query(User).filter(User.email == payload.email, User.institution_id == payload.institution_id).first()
     if exists:
         raise HTTPException(status_code=400, detail="User already exists")
@@ -79,6 +79,6 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
 
 
 @router.get("/me", response_model=UserResponse)
-def me(user: User = Depends(get_current_user)):
+async def me(user: User = Depends(get_current_user)):
     return user
 

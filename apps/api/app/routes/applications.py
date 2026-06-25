@@ -9,7 +9,7 @@ from app.core.rbac_engine import check_permission
 from app.core.schema_engine import SchemaEngine
 from app.core.workflow_engine import WorkflowEngine, WorkflowExecutionError
 from app.models import Application, Workflow
-from app.schemas import ApplicationCreate, ApplicationResponse, ApplicationTransition
+from app.schemas import ApplicationCreate, ApplicationListResponse, ApplicationResponse, ApplicationTransition
 from app.tenant import TenantContext, get_tenant_context
 
 router = APIRouter()
@@ -75,8 +75,8 @@ async def create_application(
     return application
 
 
-@router.get("/applications")
-def list_applications(
+@router.get("/applications", response_model=ApplicationListResponse)
+async def list_applications(
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("application:read")),
     db: Session = Depends(get_db),

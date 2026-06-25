@@ -1,0 +1,11 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "complexity": ["error", 10],
+    "max-lines": ["warn", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": ["warn", { "max": 80, "skipBlankLines": true, "skipComments": true }],
+    "no-nested-ternary": "error",
+    "max-depth": ["error", 4],
+    "@next/next/no-html-link-for-pages": "error"
+  }
+}

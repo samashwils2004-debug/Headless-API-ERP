@@ -54,6 +54,10 @@ class ProjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProjectListResponse(BaseModel):
+    projects: list[ProjectResponse]
+
+
 class WorkflowCreate(BaseModel):
     name: str = Field(min_length=1)
     definition: dict[str, Any]
@@ -71,6 +75,10 @@ class WorkflowResponse(BaseModel):
     is_ai_generated: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class WorkflowListResponse(BaseModel):
+    workflows: list[WorkflowResponse]
 
 
 class ApplicationCreate(BaseModel):
@@ -97,6 +105,10 @@ class ApplicationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ApplicationListResponse(BaseModel):
+    applications: list[ApplicationResponse]
+
+
 class EventResponse(BaseModel):
     id: str
     type: str
@@ -107,6 +119,10 @@ class EventResponse(BaseModel):
     data: dict[str, Any]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EventListResponse(BaseModel):
+    events: list[EventResponse]
 
 
 class BlueprintCompileRequest(BaseModel):
@@ -123,6 +139,13 @@ class BlueprintProposalResponse(BaseModel):
     is_mock: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BlueprintDeployResponse(BaseModel):
+    workflow_id: str
+    workflow_name: str
+    version: int
+    message: str
 
 
 # API Key schemas
@@ -171,6 +194,13 @@ class TemplateListResponse(BaseModel):
 
 class TemplateDetailResponse(TemplateResponse):
     definition: dict[str, Any]
+
+
+class TemplateDeployResponse(BaseModel):
+    id: str
+    name: str
+    version: int
+    message: str
 
 
 # ── Architect (Mode B) schemas ────────────────────────────────────────────────

@@ -9,7 +9,7 @@ from app.core.rbac_engine import check_permission
 from app.core.event_engine import EventEngine
 from app.database import get_db
 from app.models import BlueprintProposal, Workflow
-from app.schemas import BlueprintCompileRequest, BlueprintProposalResponse
+from app.schemas import BlueprintCompileRequest, BlueprintDeployResponse, BlueprintProposalResponse
 from app.security import get_current_user
 from app.tenant import get_tenant_context
 from app.time_utils import utcnow_naive
@@ -25,7 +25,7 @@ except ImportError:
 
 
 @router.post("/ai/blueprints/compile", response_model=BlueprintProposalResponse, status_code=201)
-def compile_blueprint(
+async def compile_blueprint(
     body: BlueprintCompileRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -67,7 +67,7 @@ def compile_blueprint(
     return proposal
 
 
-@router.post("/ai/blueprints/{proposal_id}/deploy", status_code=201)
+@router.post("/ai/blueprints/{proposal_id}/deploy", response_model=BlueprintDeployResponse, status_code=201)
 async def deploy_blueprint(
     proposal_id: str,
     db: Session = Depends(get_db),

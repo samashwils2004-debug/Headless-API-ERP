@@ -11,7 +11,7 @@ from app.database import get_db
 from app.core.event_engine import EventEngine
 from app.core.rbac_engine import check_permission
 from app.models import Workflow
-from app.schemas import WorkflowCreate, WorkflowResponse
+from app.schemas import WorkflowCreate, WorkflowListResponse, WorkflowResponse
 from app.tenant import TenantContext, get_tenant_context
 
 logger = logging.getLogger(__name__)
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/workflows")
-def list_workflows(
+@router.get("/workflows", response_model=WorkflowListResponse)
+async def list_workflows(
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("workflow:read")),
     db: Session = Depends(get_db),
@@ -38,7 +38,7 @@ def list_workflows(
 
 
 @router.post("/workflows", response_model=WorkflowResponse)
-def create_workflow(
+async def create_workflow(
     payload: WorkflowCreate,
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("workflow:write")),
@@ -168,7 +168,7 @@ async def undeploy_workflow(
 
 
 @router.put("/workflows/{workflow_id}", response_model=WorkflowResponse)
-def update_workflow(
+async def update_workflow(
     workflow_id: str,
     payload: WorkflowCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -198,7 +198,7 @@ def update_workflow(
 
 
 @router.delete("/workflows/{workflow_id}", status_code=204)
-def delete_workflow(
+async def delete_workflow(
     workflow_id: str,
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("workflow:write")),

@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "workflow_blueprint",
+  "title": "Orquestra Workflow Blueprint",
+  "description": "JSON Schema for Orquestra AI-generated workflow blueprints. Mirrors BLUEPRINT_SCHEMA in apps/api/app/core/schema_engine.py.",
+  "type": "object",
+  "required": ["workflow", "roles", "events", "compliance_tags"],
+  "additionalProperties": false,
+  "properties": {
+    "workflow": {
+      "type": "object",
+      "description": "State-machine definition for the workflow",
+      "required": ["name", "initial_state", "states"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Machine-readable workflow identifier (snake_case)"
+        },
+        "initial_state": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The starting state key; must exist in 'states'"
+        },
+        "states": {
+          "type": "object",
+          "minProperties": 2,
+          "description": "Map of state-name -> state definition. Must have at least one initial and one terminal state.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initial", "intermediate", "terminal"],
+                "description": "State classification"
+              },
+              "transitions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["to"],
+                  "properties": {
+                    "to": {
+                      "type": "string",
+                      "description": "Target state key"
+                    },
+                    "condition": {
+                      "type": ["string", "null"],
+                      "description": "Condition expression referencing schema field names (e.g. 'score >= 70')"
+                    },
+                    "emit_event": {
+                      "type": "string",
+                      "description": "Event type emitted when this transition fires (dot-notation, e.g. 'application.submitted')"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "schema": {
+          "type": "object",
+          "description": "Field definitions for data passed into this workflow",
+          "properties": {
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "type"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Field name (snake_case). Must match field names used in transition conditions."
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["string", "number", "boolean"],
+                    "description": "Data type"
+                  },
+                  "required": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "min": {
+                    "type": "number",
+                    "description": "Minimum value (number fields only)"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "Maximum value (number fields only)"
+                  },
+                  "enum": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Allowed values (string fields only)"
+                  },
+                  "format": {
+                    "type": "string",
+                    "description": "Format hint (e.g. 'email', 'date')"
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "description": "RBAC roles for this workflow",
+      "items": {
+        "type": "object",
+        "required": ["name", "permissions"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Role name (e.g. 'applicant', 'reviewer', 'admin')"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Permission string in 'resource:action' format (e.g. 'application:create'). Wildcards allowed: 'application:*'"
+            },
+            "description": "List of permissions granted to this role"
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Catalog of all events this workflow may emit",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Event type in dot-notation (e.g. 'application.submitted'). Must match emit_event values in transitions."
+          },
+          "version": {
+            "type": "string",
+            "default": "1.0",
+            "description": "Event schema version"
+          }
+        }
+      }
+    },
+    "compliance_tags": {
+      "type": "array",
+      "description": "Compliance frameworks applicable to this workflow",
+      "items": {
+        "type": "string",
+        "enum": ["ferpa", "gdpr", "hipaa", "dpdp", "ccpa"],
+        "description": "Lowercase compliance tag"
+      }
+    }
+  }
+}

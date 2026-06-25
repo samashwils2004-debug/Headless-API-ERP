@@ -1,5 +1,4 @@
-﻿"use client";
-import Link from "next/link";
+﻿import Link from "next/link";
 import { ArrowRight, Layers, Database, Code, Globe2 } from "lucide-react";
 
 export default function ArchitecturePage() {

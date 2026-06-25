@@ -47,14 +47,6 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     groq_api_key: str = ""
-    aiven_url: str = ""
-    aiven_publishable_key: str = ""
-    aiven_service_role_key: str = ""
-    aiven_jwt_secret: str = ""
-    aiven_token_expire_minutes: int = 10
-    azure_tenant_id: str = ""
-    azure_client_id: str = ""
-    azure_client_secret: str = ""
     ai_cache_ttl: int = 86400  # 24h Redis cache for AI responses
 
     sentry_dsn: str = ""

@@ -1,3 +1,5 @@
+"use client";
+
 // a react hook that keeps the console's live event feed updated in real time
 // it does two things:
 // 1. does a REST backfill: GET /api/events?limit=50
@@ -8,8 +10,6 @@
 
 //events are pushed into Zustand's useEventStore, which all console pages subscribe to
 // connects /api/events (REST) and /api/events/ws (WebSocket)
-
-"use client";
 
 import { useEffect } from "react";
 

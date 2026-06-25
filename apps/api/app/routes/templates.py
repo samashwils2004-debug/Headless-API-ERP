@@ -14,6 +14,7 @@ from app.schemas import (
     TemplateDetailResponse,
     TemplateCustomizeRequest,
     TemplateCustomizeResponse,
+    TemplateDeployResponse,
 )
 from app.security import get_current_user
 from app.tenant import get_tenant_context
@@ -23,7 +24,7 @@ _customizer = TemplateCustomizer()
 
 
 @router.get("/templates", response_model=TemplateListResponse)
-def list_templates(
+async def list_templates(
     category: str | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -36,7 +37,7 @@ def list_templates(
 
 
 @router.get("/templates/{template_id}", response_model=TemplateDetailResponse)
-def get_template(
+async def get_template(
     template_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -48,7 +49,7 @@ def get_template(
 
 
 @router.post("/templates/{template_id}/customize", response_model=TemplateCustomizeResponse)
-def customize_template(
+async def customize_template(
     template_id: str,
     body: TemplateCustomizeRequest,
     db: Session = Depends(get_db),
@@ -87,8 +88,8 @@ def customize_template(
     )
 
 
-@router.post("/templates/{template_id}/deploy", status_code=201)
-def deploy_template(
+@router.post("/templates/{template_id}/deploy", response_model=TemplateDeployResponse, status_code=201)
+async def deploy_template(
     template_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),

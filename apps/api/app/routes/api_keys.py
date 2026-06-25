@@ -32,7 +32,7 @@ def _generate_api_key() -> tuple[str, str, str]:
 
 
 @router.get("/api-keys", response_model=APIKeyListResponse)
-def list_api_keys(
+async def list_api_keys(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     _=Depends(check_permission("api_key:read")),
@@ -50,7 +50,7 @@ def list_api_keys(
 
 
 @router.post("/api-keys", response_model=APIKeyCreateResponse, status_code=201)
-def create_api_key(
+async def create_api_key(
     body: APIKeyCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -88,7 +88,7 @@ def create_api_key(
 
 
 @router.delete("/api-keys/{key_id}", status_code=204)
-def revoke_api_key(
+async def revoke_api_key(
     key_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),

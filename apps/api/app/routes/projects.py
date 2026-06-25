@@ -4,14 +4,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.rbac_engine import check_permission
 from app.models import Project, Workflow
-from app.schemas import ProjectCreate, ProjectResponse
+from app.schemas import ProjectCreate, ProjectListResponse, ProjectResponse
 from app.tenant import TenantContext, get_tenant_context
 
 router = APIRouter()
 
 
-@router.get("/projects")
-def list_projects(
+@router.get("/projects", response_model=ProjectListResponse)
+async def list_projects(
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("project:read")),
     db: Session = Depends(get_db),
@@ -21,7 +21,7 @@ def list_projects(
 
 
 @router.post("/projects", response_model=ProjectResponse)
-def create_project(
+async def create_project(
     payload: ProjectCreate,
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("project:write")),
@@ -43,7 +43,7 @@ def create_project(
 
 
 @router.delete("/projects/{project_id}", status_code=204)
-def delete_project(
+async def delete_project(
     project_id: str,
     tenant: TenantContext = Depends(get_tenant_context),
     _=Depends(check_permission("project:write")),

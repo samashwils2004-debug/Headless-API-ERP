@@ -186,7 +186,7 @@ class APIKey(Base):
     webhook_secret_prefix = Column(String(24), nullable=True)
 
     institution = relationship("Institution", backref="api_keys")
-    architecture_version = relationship("ArchitectureVersion", backref="api_key")
+    architecture_version = relationship("ArchitectureVersion", backref="api_key", lazy="selectin")
     project = relationship("Project", backref="api_keys")
 
 
@@ -238,7 +238,7 @@ class ArchitectureVersion(Base):
     diff_summary = Column(Text, nullable=False, default="")
     created_at = Column(DateTime, default=utcnow_naive, nullable=False)
 
-    architecture = relationship("InstitutionArchitecture", backref="versions")
+    architecture = relationship("InstitutionArchitecture", backref="versions", lazy="selectin")
 
 
 class ArchWorkflow(Base):
@@ -266,8 +266,8 @@ class ArchWorkflow(Base):
     display_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=utcnow_naive, nullable=False)
 
-    architecture_version = relationship("ArchitectureVersion", backref="linked_workflows")
-    workflow = relationship("Workflow")
+    architecture_version = relationship("ArchitectureVersion", backref="linked_workflows", lazy="selectin")
+    workflow = relationship("Workflow", lazy="selectin")
 
 
 class TemplateCustomization(Base):

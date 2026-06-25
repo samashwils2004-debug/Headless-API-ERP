@@ -6,14 +6,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.rbac_engine import check_permission
 from app.models import Event
-from app.schemas import EventResponse
+from app.schemas import EventListResponse, EventResponse
 from app.tenant import TenantContext, get_tenant_context
 
 router = APIRouter()
 
 
-@router.get("/events")
-def list_events(
+@router.get("/events", response_model=EventListResponse)
+async def list_events(
     limit: int = Query(default=100, ge=1, le=500),
     tenant: TenantContext = Depends(get_tenant_context),
     user=Depends(check_permission("event:read")),

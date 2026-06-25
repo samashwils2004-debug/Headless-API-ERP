@@ -14,11 +14,17 @@ is_postgres = "postgresql" in settings.database_url
 
 connect_args = {"check_same_thread": False} if is_sqlite else {}
 if is_postgres:
+    is_neon = "neon.tech" in settings.database_url
     connect_args = {
         "sslmode": "require",
-        "application_name": "admitflow-backend",
-        "options": f"-c statement_timeout={settings.db_statement_timeout_ms}",
+        "application_name": "orquestra-backend",
     }
+    if is_neon:
+        # Neon's PgBouncer pooler rejects startup-packet OPTIONS; set timeout
+        # via SQL in the Pool "connect" event listener below instead.
+        connect_args["channel_binding"] = "require"
+    else:
+        connect_args["options"] = f"-c statement_timeout={settings.db_statement_timeout_ms}"
 
 engine_kwargs = {
     "echo": settings.db_echo,

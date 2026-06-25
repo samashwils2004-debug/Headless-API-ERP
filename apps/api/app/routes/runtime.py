@@ -21,6 +21,37 @@ class SubmitApplicationRequest(BaseModel):
     application_data: dict[str, Any] = {}
 
 
+class RuntimeApplicationResponse(BaseModel):
+    application_id: str
+    workflow_id: str
+    workflow_version: int
+    current_state: str
+    status: str
+    created_at: str
+
+
+class RuntimeApplicationDetail(RuntimeApplicationResponse):
+    applicant_data: dict[str, Any]
+    application_data: dict[str, Any]
+    updated_at: str
+
+
+class RuntimeApplicationListItem(BaseModel):
+    application_id: str
+    workflow_id: str
+    workflow_version: int
+    current_state: str
+    status: str
+    created_at: str
+
+
+class RuntimeApplicationListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    applications: list[RuntimeApplicationListItem]
+
+
 async def _get_db_and_auth(request: Request):
     """Helper that returns (db, auth) for runtime routes."""
     db = next(get_db())
@@ -28,7 +59,7 @@ async def _get_db_and_auth(request: Request):
     return db, auth
 
 
-@router.post("/v1/applications", status_code=201)
+@router.post("/v1/applications", response_model=RuntimeApplicationResponse, status_code=201)
 async def submit_application(body: SubmitApplicationRequest, request: Request):
     from app.services import get_event_engine, get_workflow_engine
 
@@ -103,7 +134,7 @@ async def submit_application(body: SubmitApplicationRequest, request: Request):
     }
 
 
-@router.get("/v1/applications/{application_id}")
+@router.get("/v1/applications/{application_id}", response_model=RuntimeApplicationDetail)
 async def get_application(application_id: str, request: Request):
     db, auth = await _get_db_and_auth(request)
 
@@ -131,7 +162,7 @@ async def get_application(application_id: str, request: Request):
     }
 
 
-@router.get("/v1/applications")
+@router.get("/v1/applications", response_model=RuntimeApplicationListResponse)
 async def list_applications(
     request: Request,
     workflow_id: str | None = None,

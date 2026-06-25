@@ -138,8 +138,10 @@ export default function WorkflowsPage() {
 
   useEffect(() => {
     if (!context.institutionId || !context.projectId) return;
-    listWorkflows(tenant).then((d) => setWorkflows(d.workflows)).catch(() => {});
-  }, [context.institutionId, context.projectId]);
+    listWorkflows({ institutionId: context.institutionId, projectId: context.projectId })
+      .then((d) => setWorkflows(d.workflows))
+      .catch(() => {});
+  }, [context.institutionId, context.projectId, setWorkflows]);
 
   const refreshWorkflows = async () => {
     const d = await listWorkflows(tenant);
