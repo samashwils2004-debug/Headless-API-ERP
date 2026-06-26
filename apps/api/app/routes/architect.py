@@ -16,7 +16,7 @@ from app.ai.architect.prompt_factory import ERPPromptFactory
 from app.ai.architect.visualization_generator import ERPVisualizationGenerator
 from app.ai.provider_router import get_provider_router
 from app.core.api_key_utils import generate_api_key, generate_webhook_secret
-from app.core.event_engine import EventEngine
+from app.services import get_event_engine
 from app.core.rbac_engine import check_permission
 from app.database import get_db
 from app.models import APIKey, ArchWorkflow, ArchitectureVersion, InstitutionArchitecture, Workflow
@@ -535,7 +535,7 @@ async def compile_architecture(
 
     # Emit event — failure must never block compile response
     try:
-        event_engine = EventEngine(db)
+        event_engine = get_event_engine(db)
         await event_engine.emit(
             "architecture.compiled",
             tenant.institution_id,

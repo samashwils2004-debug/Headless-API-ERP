@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.event_engine import EventEngine
+from app.services import get_event_engine
 from app.core.rbac_engine import check_permission
 from app.models import Workflow
 from app.schemas import WorkflowCreate, WorkflowListResponse, WorkflowResponse
@@ -116,7 +116,7 @@ async def deploy_workflow(
     db.refresh(workflow)
 
     try:
-        event_engine = EventEngine(db)
+        event_engine = get_event_engine(db)
         await event_engine.emit(
             "workflow.deployed",
             institution_id=tenant.institution_id,
@@ -155,7 +155,7 @@ async def undeploy_workflow(
     db.refresh(workflow)
 
     try:
-        event_engine = EventEngine(db)
+        event_engine = get_event_engine(db)
         await event_engine.emit(
             "workflow.undeployed",
             institution_id=tenant.institution_id,

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.blueprint_generator import BlueprintGenerator
 from app.core.rbac_engine import check_permission
-from app.core.event_engine import EventEngine
+from app.services import get_event_engine
 from app.database import get_db
 from app.models import BlueprintProposal, Workflow
 from app.schemas import BlueprintCompileRequest, BlueprintDeployResponse, BlueprintProposalResponse
@@ -125,7 +125,7 @@ async def deploy_blueprint(
     db.refresh(workflow)
 
     # Emit event
-    event_engine = EventEngine(db)
+    event_engine = get_event_engine(db)
     await event_engine.emit(
         "ai.blueprint.deployed",
         tenant.institution_id,

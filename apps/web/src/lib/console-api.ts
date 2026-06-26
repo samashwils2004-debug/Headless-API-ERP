@@ -527,3 +527,20 @@ export async function revokeApiKey(tenant: TenantContext, keyId: string) {
   if (response.status === 204) return;
   return parse<void>(response);
 }
+
+export async function deleteDomain(
+  tenant: TenantContext,
+  archId: string,
+  domainId: string,
+) {
+  const response = await fetch(`/api/architect/${archId}/domains/${domainId}`, {
+    method: "DELETE",
+    headers: headersForTenant(tenant),
+  });
+  return parse<{
+    graph: ERPDomainGraph | Record<string, unknown>;
+    version: number;
+    diff: { summary: string };
+    visualization_config: Record<string, unknown>;
+  }>(response);
+}

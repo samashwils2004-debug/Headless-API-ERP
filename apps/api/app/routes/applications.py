@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.event_engine import EventEngine
+from app.services import get_event_engine
 from app.core.rbac_engine import check_permission
 from app.core.schema_engine import SchemaEngine
 from app.core.workflow_engine import WorkflowEngine, WorkflowExecutionError
@@ -54,7 +54,7 @@ async def create_application(
     db.commit()
     db.refresh(application)
 
-    event_engine = EventEngine(db)
+    event_engine = get_event_engine(db)
     await event_engine.emit(
         "application.created",
         institution_id=tenant.institution_id,
@@ -134,7 +134,7 @@ async def transition_application(
     db.commit()
     db.refresh(application)
 
-    event_engine = EventEngine(db)
+    event_engine = get_event_engine(db)
     await event_engine.emit(
         "application.transitioned",
         institution_id=tenant.institution_id,

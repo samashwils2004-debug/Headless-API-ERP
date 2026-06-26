@@ -28,6 +28,7 @@ import {
   compileArchitecture,
   linkWorkflowToDomain,
   generateERPDesign,
+  deleteDomain,
   type ArchitectureItem,
   type ArchitectureVersionItem,
   type DesignSpec,
@@ -37,10 +38,6 @@ import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 import type { DomainDef, ERPDomainGraph } from "@/types/contracts";
 import { ERPDesign } from "@/components/console/ERPDesign";
 import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
-
-// calls /api/ai/compile to generate blueprints, etc
-// calls getCsrfToken() manually from the cookie for ts direct fetch calls
-// connects to /api/ai/compile (same endpoint as console-api.ts)
 
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
@@ -85,6 +82,7 @@ export default function ArchitectPage() {
   const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup">("graph");
   const [designSpec, setDesignSpec] = useState<DesignSpec | null>(null);
   const [generatingDesign, setGeneratingDesign] = useState(false);
+  const [deletingDomainId, setDeletingDomainId] = useState<string | null>(null);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -203,29 +201,24 @@ export default function ArchitectPage() {
   async function handleDeleteDomain(domainId: string, domainLabel: string) {
     if (!arch) return;
     if (!confirm(`Delete domain "${domainLabel}"? This cannot be undone.`)) return;
+    setDeletingDomainId(domainId);
     try {
-      const res = await fetch(
-        `/api/architect/${arch.id}/domains/${domainId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "X-Institution-Id": context.institutionId,
-            "X-Project-Id": context.projectId,
-            "X-CSRF-Token": document.cookie
-              .split("; ")
-              .find((r) => r.startsWith("csrf_token="))
-              ?.split("=")[1] || "",
-          },
-        }
-      );
-      if (!res.ok) throw new Error("Failed to delete domain");
-      const data = await res.json();
+      const data = await deleteDomain(tenant, arch.id, domainId);
       setArch((prev) =>
-        prev ? { ...prev, graph_json: data.graph, version: data.version } : prev
+        prev
+          ? {
+              ...prev,
+              graph_json: data.graph,
+              version: data.version,
+              visualization_config: data.visualization_config ?? prev.visualization_config,
+            }
+          : prev,
       );
       toast.success(`Domain "${domainLabel}" deleted`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete domain");
+    } finally {
+      setDeletingDomainId(null);
     }
   }
 
@@ -435,14 +428,17 @@ export default function ArchitectPage() {
                         )}
                         <button
                           onClick={() => handleDeleteDomain(domain.id, domain.label)}
-                          className="shrink-0 flex items-center gap-1 rounded px-2 py-0.5 text-xs border transition-colors"
+                          disabled={deletingDomainId === domain.id}
+                          className="shrink-0 flex items-center gap-1 rounded px-2 py-0.5 text-xs border transition-colors disabled:opacity-50"
                           style={{
                             borderColor: "#ef4444",
                             color: "#ef4444",
                             background: "transparent"
                           }}
                         >
-                          <Trash2 size={10} />
+                          {deletingDomainId === domain.id
+                            ? <Loader2 size={10} className="animate-spin" />
+                            : <Trash2 size={10} />}
                         </button>
                       </div>
                       {domain.workflow_name && (
