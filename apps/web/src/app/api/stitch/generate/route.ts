@@ -140,7 +140,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let stitchModule: { stitch: { project: (id: string) => StitchProjectRef; callTool: (name: string, args: Record<string, unknown>) => Promise<unknown> } };
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    // @ts-ignore - optional dependency, gracefully handled at runtime if absent
     stitchModule = (await import("@google/stitch-sdk")) as any;
   } catch {
     return NextResponse.json(
