@@ -221,7 +221,7 @@ def _compute_diff_summary(old_graph: dict, new_graph: dict) -> str:
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
-@router.post("/architect", status_code=201)
+@router.post("/architect", response_model=ArchitectureResponse, status_code=201)
 def create_architecture(
     body: ArchitectureCreate,
     db: Session = Depends(get_db),
@@ -269,7 +269,7 @@ def get_or_list_architectures(
     return {"architecture": ArchitectureResponse.model_validate(arch)}
 
 
-@router.get("/architect/{arch_id}")
+@router.get("/architect/{arch_id}", response_model=ArchitectureResponse)
 def get_architecture(
     arch_id: str,
     db: Session = Depends(get_db),
