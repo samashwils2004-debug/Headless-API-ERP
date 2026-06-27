@@ -54,7 +54,7 @@ export default function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold" style={{ color: "#f4f4f5" }}>API Keys</h2>
           <p className="text-sm mt-1" style={{ color: "#71717a" }}>
@@ -63,7 +63,7 @@ export default function ApiKeysPage() {
         </div>
         <a
           href="/console/architect"
-          className="flex items-center gap-2 rounded px-4 py-2 text-sm font-medium border transition-colors hover:bg-[#1b1b24]"
+          className="self-start sm:self-auto flex items-center gap-2 rounded px-4 py-2 text-sm font-medium border transition-colors hover:bg-[#1b1b24]"
           style={{ borderColor: "#25252b", color: "#a1a1aa" }}
         >
           <ExternalLink size={14} />
@@ -100,8 +100,8 @@ export default function ApiKeysPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded border overflow-hidden" style={{ borderColor: "#1c1c22", background: "#141418" }}>
-          <table className="w-full text-left text-sm">
+        <div className="rounded border overflow-x-auto" style={{ borderColor: "#1c1c22", background: "#141418" }}>
+          <table className="w-full text-left text-sm min-w-[640px]">
             <thead style={{ background: "#1a1a20", borderBottom: "1px solid #25252b" }}>
               <tr>
                 <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider" style={{ color: "#71717a" }}>Name</th>

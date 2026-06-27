@@ -140,9 +140,9 @@ export default function TemplatesPage() {
   const schemaFields = detail?.definition.schema?.fields ?? [];
 
   return (
-    <div className="flex gap-5 h-[calc(100vh-120px)] min-h-0">
+    <div className="flex flex-col lg:flex-row gap-5 lg:h-[calc(100dvh-120px)] lg:min-h-0">
       {/* Left list */}
-      <div className="w-72 flex-none flex flex-col min-h-0">
+      <div className="w-full lg:w-72 lg:flex-none flex flex-col lg:min-h-0">
         <div className="flex-none mb-3">
           <h2 className="text-2xl font-semibold" style={{ color: "#f4f4f5" }}>Templates</h2>
           <p className="text-sm mt-0.5" style={{ color: "#71717a" }}>Reusable workflow blueprints</p>
@@ -158,7 +158,7 @@ export default function TemplatesPage() {
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+        <div className="overflow-y-auto space-y-2 pr-1 max-h-[280px] lg:max-h-none lg:flex-1">
           {loadingList && (
             <div className="animate-pulse space-y-2 pt-1">
               {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 rounded" style={{ background: "#1b1b24" }} />)}
@@ -195,7 +195,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Right detail */}
-      <div className="flex-1 flex flex-col min-h-0 rounded-lg overflow-hidden" style={{ border: "1px solid #25252b" }}>
+      <div className="flex-1 flex flex-col min-h-[500px] lg:min-h-0 rounded-lg overflow-hidden" style={{ border: "1px solid #25252b" }}>
         {!selectedId && (
           <div className="flex-1 flex flex-col items-center justify-center" style={{ background: "#141418" }}>
             <Layers size={32} style={{ color: "#3f3f46" }} className="mb-3" />
@@ -238,7 +238,7 @@ export default function TemplatesPage() {
             <div className="flex-1 overflow-y-auto p-5 min-h-0">
               {detailTab === "overview" && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="rounded p-3" style={{ background: "#1b1b24", border: "1px solid #25252b" }}>
                       <div className="text-xs mb-1" style={{ color: "#71717a" }}>Category</div>
                       <div className="text-sm font-medium capitalize" style={{ color: "#f4f4f5" }}>{detail.category.replace("_", " ")}</div>

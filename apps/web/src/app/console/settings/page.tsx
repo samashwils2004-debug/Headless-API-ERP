@@ -42,7 +42,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full max-w-[1000px]">
       <div className="mb-6">
         <h1 className="text-2xl font-bold" style={{ color: "#f4f4f5" }}>Settings</h1>
         <p className="text-sm mt-1" style={{ color: "#8a8a94" }}>

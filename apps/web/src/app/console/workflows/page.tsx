@@ -269,12 +269,12 @@ export default function WorkflowsPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold" style={{ color: "#f4f4f5" }}>Workflows</h2>
           <p className="text-sm mt-0.5" style={{ color: "#71717a" }}>State-machine definitions powering your processes</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => { setPanelOpen(true); setBlueprint(null); setGenError(null); }}
             disabled={noProject}
@@ -295,8 +295,8 @@ export default function WorkflowsPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg" style={{ border: "1px solid #25252b" }}>
-        <table className="w-full text-left text-sm">
+      <div className="rounded-lg overflow-x-auto" style={{ border: "1px solid #25252b" }}>
+        <table className="w-full text-left text-sm min-w-[560px]">
           <thead style={{ background: "#141418" }}>
             <tr>
               {["Name", "Version", "Source", "Status", "Actions"].map((h) => (
@@ -386,9 +386,9 @@ export default function WorkflowsPage() {
 
       {/* Slide-in panel */}
       {panelOpen && (
-        <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setPanelOpen(false)} />
-          <div className="w-[520px] flex-none flex flex-col overflow-hidden" style={{ background: "#141418", borderLeft: "1px solid #25252b" }}>
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setPanelOpen(false)} />
+          <div className="relative z-10 w-full max-w-[520px] flex flex-col overflow-hidden" style={{ background: "#141418", borderLeft: "1px solid #25252b" }}>
             {/* Panel header */}
             <div className="flex-none flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #25252b" }}>
               <h3 className="text-base font-semibold" style={{ color: "#f4f4f5" }}>New Workflow</h3>
@@ -526,7 +526,7 @@ export default function WorkflowsPage() {
                   )}
 
                   {previewTab === "validation" && validation && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {Object.entries(validation).map(([key, val]) =>
                         key === "is_valid" ? null : (
                           <ValidationBadge key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} passed={val.valid} errors={val.errors ?? []} />

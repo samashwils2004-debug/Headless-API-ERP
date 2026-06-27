@@ -103,9 +103,9 @@ export default function EventStreamPage() {
       <div className="space-y-2">
         {filtered.map((event) => (
           <div key={event.id} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-secondary)] p-3">
-            <div className="flex items-center justify-between text-sm">
-              <strong>{event.type}</strong>
-              <span className="text-[var(--text-secondary)]">{new Date(event.timestamp).toLocaleString()}</span>
+            <div className="flex items-start justify-between gap-2 text-sm flex-wrap">
+              <strong className="break-all">{event.type}</strong>
+              <span className="shrink-0 text-[var(--text-secondary)]">{new Date(event.timestamp).toLocaleString()}</span>
             </div>
             <p className="mt-1 text-xs text-[var(--text-secondary)]">
               Institution: {event.institution_id} | Project: {event.project_id}

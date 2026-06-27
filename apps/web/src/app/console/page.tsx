@@ -134,7 +134,7 @@ export default function ConsoleDashboardPage() {
   const noProject = !context.institutionId || !context.projectId;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8 w-full max-w-[1400px]">
       {/* Header */}
       <div>
         <h2 className="text-2xl font-light" style={{ color: "#f4f4f5" }}>
@@ -226,7 +226,7 @@ export default function ConsoleDashboardPage() {
       </div>
 
       {/* Recent Activity */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Recent Events */}
         <div>
           <div className="mb-3 flex items-center justify-between">

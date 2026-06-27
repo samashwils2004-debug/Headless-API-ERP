@@ -1,2 +1,0 @@
-﻿# Admissions ERP Prototype
-

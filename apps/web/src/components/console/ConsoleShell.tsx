@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -12,7 +13,9 @@ import {
   KeyRound,
   Settings,
   ChevronDown,
-  PenTool
+  PenTool,
+  Menu,
+  X,
 } from "lucide-react";
 
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
@@ -36,55 +39,65 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const setContext = useProjectContextStore((s) => s.setContext);
   const projects = useProjectStore((s) => s.projects);
   const user = useAuthStore((s) => s.user);
-  
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div className="min-h-screen flex" style={{ background: "#0f0f12", color: "#f4f4f5" }}>
-      {/* Sidebar 260px */}
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 md:hidden"
+          style={{ background: "rgba(0,0,0,0.6)" }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed off-screen on mobile, normal flow on md+ */}
       <aside
-        className="flex-none w-[260px] flex flex-col"
+        className={`fixed md:relative inset-y-0 left-0 z-50 md:z-auto w-[260px] flex-none flex flex-col transition-transform duration-200 md:transition-none md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
         style={{ background: "#141418", borderRight: "1px solid #25252b" }}
       >
-        {/* Logo */}
-        <Link
-          href="/"
-          className="group flex items-center gap-3 px-5 h-[60px] shrink-0 hover:bg-[#1e1e24] transition-colors"
-          style={{ borderBottom: "1px solid #25252b" }}
-        >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 40 40"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="shrink-0"
+        {/* Logo row with close button on mobile */}
+        <div className="flex items-center h-[60px] shrink-0" style={{ borderBottom: "1px solid #25252b" }}>
+          <Link
+            href="/"
+            className="group flex items-center gap-3 px-5 flex-1 h-full hover:bg-[#1e1e24] transition-colors"
           >
-            {/* Center node */}
-            <rect x="16" y="16" width="8" height="8" fill="white" className="transition-all duration-500 group-hover:scale-110" style={{ transformOrigin: '20px 20px' }} />
-            {/* Top node */}
-            <rect x="16" y="4" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-y-[-2px] group-hover:opacity-100" />
-            {/* Right node */}
-            <rect x="28" y="16" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-x-[2px] group-hover:opacity-100" />
-            {/* Bottom node */}
-            <rect x="16" y="28" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-y-[2px] group-hover:opacity-100" />
-            {/* Left node */}
-            <rect x="4" y="16" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-x-[-2px] group-hover:opacity-100" />
-
-            {/* Connecting lines */}
-            <line x1="20" y1="12" x2="20" y2="16" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
-            <line x1="24" y1="20" x2="28" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
-            <line x1="20" y1="24" x2="20" y2="28" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
-            <line x1="12" y1="20" x2="16" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
-          </svg>
-          <div>
-            <span className="text-sm font-semibold" style={{ color: "#f4f4f5" }}>Orquestra</span>
-            <span
-              className="text-[10px] tracking-widest uppercase block leading-none mt-0.5"
-              style={{ color: "#71717a" }}
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 40 40"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="shrink-0"
             >
-              Infrastructure
-            </span>
-          </div>
-        </Link>
+              <rect x="16" y="16" width="8" height="8" fill="white" className="transition-all duration-500 group-hover:scale-110" style={{ transformOrigin: "20px 20px" }} />
+              <rect x="16" y="4" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-y-[-2px] group-hover:opacity-100" />
+              <rect x="28" y="16" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-x-[2px] group-hover:opacity-100" />
+              <rect x="16" y="28" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-y-[2px] group-hover:opacity-100" />
+              <rect x="4" y="16" width="8" height="8" fill="white" opacity="0.7" className="transition-all duration-500 group-hover:translate-x-[-2px] group-hover:opacity-100" />
+              <line x1="20" y1="12" x2="20" y2="16" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+              <line x1="24" y1="20" x2="28" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+              <line x1="20" y1="24" x2="20" y2="28" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+              <line x1="12" y1="20" x2="16" y2="20" stroke="white" strokeWidth="1.5" opacity="0.4" className="transition-opacity duration-500 group-hover:opacity-70" />
+            </svg>
+            <div>
+              <span className="text-sm font-semibold" style={{ color: "#f4f4f5" }}>Orquestra</span>
+              <span className="text-[10px] tracking-widest uppercase block leading-none mt-0.5" style={{ color: "#71717a" }}>
+                Infrastructure
+              </span>
+            </div>
+          </Link>
+          {/* Close button — mobile only */}
+          <button
+            className="md:hidden px-4 h-full flex items-center"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+            style={{ color: "#71717a" }}
+          >
+            <X size={18} />
+          </button>
+        </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -96,6 +109,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
               <Link
                 key={href}
                 href={href}
+                onClick={() => setSidebarOpen(false)}
                 className="group flex items-center gap-2.5 px-3 py-2 rounded text-sm transition-colors"
                 style={
                   active
@@ -130,25 +144,35 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Context Bar 60px */}
+        {/* Top Context Bar */}
         <header
-          className="flex items-center justify-between px-6 h-[60px] shrink-0 gap-4"
+          className="flex items-center justify-between px-3 sm:px-6 h-[60px] shrink-0 gap-2"
           style={{ background: "#141418", borderBottom: "1px solid #25252b" }}
         >
-          {/* Left */}
-          <div className="flex items-center gap-4 text-sm">
-            <span style={{ color: "#71717a" }}>
+          {/* Hamburger — mobile only */}
+          <button
+            className="md:hidden shrink-0 p-1.5 rounded hover:bg-[#1e1e24] transition-colors"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+            style={{ color: "#71717a" }}
+          >
+            <Menu size={20} />
+          </button>
+
+          {/* Left side — context info */}
+          <div className="flex items-center gap-2 sm:gap-4 text-sm min-w-0 flex-1">
+            <span className="hidden lg:inline truncate" style={{ color: "#71717a" }}>
               <span>Institution: </span>
               <span style={{ color: "#f4f4f5" }} className="font-medium">
                 {context.institutionId || "Not selected"}
               </span>
             </span>
 
-            <div className="flex items-center gap-1.5">
-              <span style={{ color: "#71717a" }}>Project:</span>
-              <div className="relative">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="hidden sm:inline shrink-0" style={{ color: "#71717a" }}>Project:</span>
+              <div className="relative min-w-0">
                 <select
-                  className="appearance-none pl-2 pr-6 py-1 rounded text-sm font-medium cursor-pointer"
+                  className="appearance-none pl-2 pr-6 py-1 rounded text-sm font-medium cursor-pointer max-w-[140px] sm:max-w-[200px] lg:max-w-none"
                   style={{
                     background: "#1e1e24",
                     border: "1px solid #25252b",
@@ -186,7 +210,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             </div>
 
             <span
-              className="px-2 py-0.5 rounded text-[11px] font-medium"
+              className="shrink-0 px-2 py-0.5 rounded text-[11px] font-medium"
               style={{
                 background: context.environment === "production" ? "#1a0a0a" : "#0a1a0a",
                 color: context.environment === "production" ? "#ef4444" : "#16a34a",
@@ -197,8 +221,8 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             </span>
           </div>
 
-          {/* Right */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right — hidden on small screens */}
+          <div className="hidden xl:flex items-center gap-2 shrink-0">
             <span
               className="px-2 py-0.5 rounded text-[11px] border"
               style={{ color: "#71717a", borderColor: "#25252b" }}
@@ -215,7 +239,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 px-6 py-6 overflow-auto" style={{ background: "#0f0f12" }}>
+        <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 overflow-auto" style={{ background: "#0f0f12" }}>
           {children}
         </main>
       </div>

@@ -241,65 +241,69 @@ export default function ArchitectPage() {
   }
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="w-full max-w-[1400px] space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Building2 size={22} style={{ color: "#3b82f6" }} />
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#f4f4f5" }}>Architect</h1>
-          <p className="text-sm" style={{ color: "#8a8a94" }}>
-            ERP domain graph — compose your institutional infrastructure
-          </p>
-        </div>
-        <span className="ml-2 text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#3b82f630", background: "#3b82f610", color: "#60a5fa" }}>
-          IAL
-        </span>
-
-        {/* View mode toggle */}
-        <div className="ml-auto flex items-center rounded-lg border overflow-hidden" style={{ borderColor: "#25252b" }}>
-          <button
-            onClick={() => setViewMode("graph")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
-            style={
-              viewMode === "graph"
-                ? { background: "#3b82f620", color: "#60a5fa" }
-                : { background: "transparent", color: "#71717a" }
-            }
-          >
-            <PenTool size={12} />
-            Graph
-          </button>
-          <button
-            onClick={() => setViewMode("preview")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
-            style={
-              viewMode === "preview"
-                ? { background: "#f59e0b20", color: "#fbbf24" }
-                : { background: "transparent", color: "#71717a" }
-            }
-          >
-            <Eye size={12} />
-            Preview
-          </button>
-          <button
-            onClick={() => setViewMode("mockup")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
-            style={
-              viewMode === "mockup"
-                ? { background: "#10b98120", color: "#34d399" }
-                : { background: "transparent", color: "#71717a" }
-            }
-          >
-            <Layers size={12} />
-            Mockup
-          </button>
-        </div>
-
-        {arch && (
-          <span className="text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#25252b", color: "#71717a" }}>
-            v{arch.version}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Building2 size={22} className="shrink-0" style={{ color: "#3b82f6" }} />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold" style={{ color: "#f4f4f5" }}>Architect</h1>
+            <p className="text-sm" style={{ color: "#8a8a94" }}>
+              ERP domain graph — compose your institutional infrastructure
+            </p>
+          </div>
+          <span className="shrink-0 ml-1 text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#3b82f630", background: "#3b82f610", color: "#60a5fa" }}>
+            IAL
           </span>
-        )}
+        </div>
+
+        {/* View mode toggle + version */}
+        <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
+          <div className="flex items-center rounded-lg border overflow-hidden" style={{ borderColor: "#25252b" }}>
+            <button
+              onClick={() => setViewMode("graph")}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+              style={
+                viewMode === "graph"
+                  ? { background: "#3b82f620", color: "#60a5fa" }
+                  : { background: "transparent", color: "#71717a" }
+              }
+            >
+              <PenTool size={12} />
+              Graph
+            </button>
+            <button
+              onClick={() => setViewMode("preview")}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+              style={
+                viewMode === "preview"
+                  ? { background: "#f59e0b20", color: "#fbbf24" }
+                  : { background: "transparent", color: "#71717a" }
+              }
+            >
+              <Eye size={12} />
+              Preview
+            </button>
+            <button
+              onClick={() => setViewMode("mockup")}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors"
+              style={
+                viewMode === "mockup"
+                  ? { background: "#10b98120", color: "#34d399" }
+                  : { background: "transparent", color: "#71717a" }
+              }
+            >
+              <Layers size={12} />
+              Mockup
+            </button>
+          </div>
+
+          {arch && (
+            <span className="text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#25252b", color: "#71717a" }}>
+              v{arch.version}
+            </span>
+          )}
+        </div>
       </div>
 
       {viewMode === "preview" ? (
@@ -396,7 +400,7 @@ export default function ArchitectPage() {
                 <p className="text-xs mt-1">Describe your institutional ERP above to get started.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {domains.map((domain, idx) => {
                   const color = domain.color || DOMAIN_COLORS[idx % DOMAIN_COLORS.length];
                   return (

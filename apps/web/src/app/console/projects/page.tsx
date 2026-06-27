@@ -213,7 +213,7 @@ export default function ProjectsPage() {
             return (
               <div
                 key={project.id}
-                className="rounded-lg px-5 py-4 flex items-center justify-between transition-colors"
+                className="rounded-lg px-3 py-3 sm:px-5 sm:py-4 flex items-start sm:items-center justify-between gap-3 transition-colors"
                 style={
                   isSelected
                     ? { background: "#0d1f3c", border: "1px solid #1d4ed8" }
