@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 
 export type ProjectContext = {
   institutionId: string;
+  institutionName: string;
   projectId: string;
   projectName: string;
   environment: "test" | "production";
@@ -17,6 +18,7 @@ type ProjectContextState = {
 
 const defaultContext: ProjectContext = {
   institutionId: "",
+  institutionName: "",
   projectId: "",
   projectName: "",
   environment: "test",

@@ -5,6 +5,7 @@ export type StateType = "initial" | "intermediate" | "terminal";
 export interface AuthUser {
   id: string;
   institution_id: string;
+  institution_name?: string;
   email: string;
   name: string;
   role: string;

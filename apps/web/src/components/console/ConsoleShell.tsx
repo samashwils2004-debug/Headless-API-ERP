@@ -164,7 +164,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             <span className="hidden lg:inline truncate" style={{ color: "#71717a" }}>
               <span>Institution: </span>
               <span style={{ color: "#f4f4f5" }} className="font-medium">
-                {context.institutionId || "Not selected"}
+                {context.institutionName || context.institutionId || "Not selected"}
               </span>
             </span>
 
@@ -185,6 +185,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                     if (!sel) return;
                     setContext({
                       institutionId: sel.institution_id,
+                      institutionName: context.institutionName,
                       projectId: sel.id,
                       projectName: sel.name,
                       environment: sel.environment,

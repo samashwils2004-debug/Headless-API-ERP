@@ -56,7 +56,7 @@ app.add_middleware(
 )
 
 # Rate limiting
-app.add_middleware(RateLimitMiddleware, redis_url=settings.redis_url)
+app.add_middleware(RateLimitMiddleware)
 
 
 @app.middleware("http")

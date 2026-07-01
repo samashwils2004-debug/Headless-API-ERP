@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.core.rbac_engine import check_permission
-from app.models import Project, Workflow
-from app.schemas import ProjectCreate, ProjectListResponse, ProjectResponse
+from app.models import Institution, Project, Workflow
+from app.schemas import ProjectCreate, ProjectListResponse, ProjectResponse, ProjectUpdate
 from app.tenant import TenantContext, get_tenant_context
 
 router = APIRouter()
@@ -24,11 +24,16 @@ async def list_projects(
 async def create_project(
     payload: ProjectCreate,
     tenant: TenantContext = Depends(get_tenant_context),
-    user=Depends(check_permission("project:write")),
+    current_user=Depends(check_permission("project:write")),
     db: Session = Depends(get_db),
 ):
-    if tenant.institution_id != user.institution_id:
+    if tenant.institution_id != current_user.institution_id:
         raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+
+    if payload.institution_name:
+        institution = db.get(Institution, tenant.institution_id)
+        if institution:
+            institution.name = payload.institution_name.strip()
 
     project = Project(
         institution_id=tenant.institution_id,
@@ -37,6 +42,33 @@ async def create_project(
         environment=payload.environment,
     )
     db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str,
+    payload: ProjectUpdate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _=Depends(check_permission("project:write")),
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.institution_id == tenant.institution_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if payload.name is not None:
+        project.name = payload.name.strip()
+    if payload.institution_name is not None:
+        institution = db.get(Institution, tenant.institution_id)
+        if institution:
+            institution.name = payload.institution_name.strip()
+
     db.commit()
     db.refresh(project)
     return project

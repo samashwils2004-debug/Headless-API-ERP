@@ -1,4 +1,4 @@
-"""Provider router — cascades through Claude → Gemini → Groq → Mock with Redis caching."""
+"""Provider router — Claude (Anthropic) with Redis caching and mock fallback."""
 from __future__ import annotations
 
 import hashlib
@@ -238,20 +238,13 @@ class ProviderRouter:
     def __init__(self) -> None:
         self.settings = get_settings()
         self._redis = None
-        self._gemini_client = None
-        self._groq_client = None
+        self._claude_client = None
         self._init_clients()
 
     def _init_clients(self) -> None:
-        # Redis cache
-        if self.settings.redis_url:
-            try:
-                import redis as redis_lib
-                self._redis = redis_lib.from_url(self.settings.redis_url, decode_responses=True)
-            except Exception as e:
-                logger.warning("Redis cache unavailable: %s", e)
+        from app.services import get_redis
+        self._redis = get_redis()
 
-        # Claude (The primary AI)
         if self.settings.anthropic_api_key:
             try:
                 import anthropic
@@ -259,25 +252,6 @@ class ProviderRouter:
                 logger.info("Claude provider initialized")
             except Exception as e:
                 logger.warning("Claude init failed: %s", e)
-
-        # Gemini
-        if self.settings.gemini_api_key:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.settings.gemini_api_key)
-                self._gemini_client = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
-                logger.info("Gemini provider initialized")
-            except Exception as e:
-                logger.warning("Gemini init failed: %s", e)
-
-        # Groq
-        if self.settings.groq_api_key:
-            try:
-                from groq import Groq
-                self._groq_client = Groq(api_key=self.settings.groq_api_key)
-                logger.info("Groq provider initialized")
-            except Exception as e:
-                logger.warning("Groq init failed: %s", e)
 
     def _get_cache(self, key: str) -> dict | None:
         if not self._redis:
@@ -374,48 +348,6 @@ Rules:
             logger.warning("Claude provider failed: %s", e)
             return None
     
-    def _try_gemini(self, prompt: str, context: dict, system_prompt: str | None = None) -> dict | None:
-        if not self._gemini_client:
-            return None
-        try:
-            sys = system_prompt or self._build_system_prompt()
-            user_content = json.dumps({"requirement": prompt, "institution_context": context})
-            response = self._gemini_client.generate_content(
-                f"{sys}\n\nRequirement: {user_content}",
-                generation_config={"response_mime_type": "application/json", "temperature": 0.3},
-            )
-            text = response.text.strip()
-            # Strip markdown code blocks if present (defensive)
-            if text.startswith("```"):
-                lines = text.split("\n")
-                text = "\n".join(lines[1:-1])
-            return json.loads(text)
-        except Exception as e:
-            logger.warning("Gemini provider failed: %s", e)
-            return None
-
-    def _try_groq(self, prompt: str, context: dict, system_prompt: str | None = None) -> dict | None:
-        if not self._groq_client:
-            return None
-        try:
-            sys = system_prompt or self._build_system_prompt()
-            user_content = json.dumps({"requirement": prompt, "institution_context": context})
-            response = self._groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": sys},
-                    {"role": "user", "content": user_content},
-                ],
-                temperature=0.1,
-                max_tokens=4096,
-                response_format={"type": "json_object"},
-            )
-            text = response.choices[0].message.content
-            return json.loads(text)
-        except Exception as e:
-            logger.warning("Groq provider failed: %s", e)
-            return None
-
     def generate(
         self,
         prompt: str,
@@ -434,21 +366,8 @@ Rules:
             logger.info("AI response served from cache")
             return {"result": cached["result"], "provider_used": cached["provider_used"], "is_mock": False, "cached": True}
 
-        # Provider cascade: Claude → Gemini → Groq → Mock
-        result = None
-        provider_used = "mock"
-
         result = self._try_claude(prompt, institution_context, system_prompt)
-        if result:
-            provider_used = "claude-sonnet-4-5"
-        else:
-            result = self._try_gemini(prompt, institution_context, system_prompt)
-            if result:
-                provider_used = "gemini-2.5-flash"
-            else:
-                result = self._try_groq(prompt, institution_context, system_prompt)
-                if result:
-                    provider_used = "groq-llama-3.1"
+        provider_used = "claude-sonnet-4-5" if result else "mock"
 
         is_mock = result is None
         if is_mock:
@@ -465,38 +384,18 @@ Rules:
         return response
 
     def reinit_if_stale(self) -> None:
-        """Re-read settings and reinitialize providers if new keys are available."""
+        """Re-read settings and reinitialize Claude if a new key is available."""
         from app.config import get_settings
         get_settings.cache_clear()
         fresh = get_settings()
-        changed = False
-        if fresh.anthropic_api_key and not getattr(self, "_claude_client", None):
+        if fresh.anthropic_api_key and not self._claude_client:
             try:
                 import anthropic
                 self._claude_client = anthropic.Anthropic(api_key=fresh.anthropic_api_key)
                 logger.info("Claude provider initialized (late-load from updated .env)")
-                changed = True
+                self.settings = fresh
             except Exception as e:
                 logger.warning("Claude late-init failed: %s", e)
-        if fresh.groq_api_key and not self._groq_client:
-            try:
-                from groq import Groq
-                self._groq_client = Groq(api_key=fresh.groq_api_key)
-                logger.info("Groq provider initialized (late-load from updated .env)")
-                changed = True
-            except Exception as e:
-                logger.warning("Groq late-init failed: %s", e)
-        if fresh.gemini_api_key and not self._gemini_client:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=fresh.gemini_api_key)
-                self._gemini_client = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
-                logger.info("Gemini provider initialized (late-load from updated .env)")
-                changed = True
-            except Exception as e:
-                logger.warning("Gemini late-init failed: %s", e)
-        if changed:
-            self.settings = fresh
 
 
 # Module-level singleton

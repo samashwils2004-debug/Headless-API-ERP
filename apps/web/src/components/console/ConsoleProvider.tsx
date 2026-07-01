@@ -34,7 +34,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         // Self-healing: if the local storage cached an old institution ID (e.g. from a prior DB seed),
         // we must clear it out so it doesn't cause Cross-tenant access denied errors.
         if (context.institutionId && context.institutionId !== user.institution_id) {
-          setContext({ institutionId: "", projectId: "", projectName: "", environment: "test" });
+          setContext({ institutionId: "", institutionName: "", projectId: "", projectName: "", environment: "test" });
           // Also clear from local scope to avoid using wrong values in this bootstrap pass
           context.institutionId = "";
           context.projectId = "";
@@ -48,19 +48,17 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         const projectsPayload = await listProjects(bootstrapTenant);
         setProjects(projectsPayload.projects);
 
-        // Prefer the explicitly-selected project from a previous session.
-        // Only auto-select the first project if the user has never selected one.
+        // Restore the explicitly-selected project from a previous session.
+        // Never auto-select the first project — the user must choose one explicitly.
         const matchedProject = context.projectId
           ? projectsPayload.projects.find((p) => p.id === context.projectId)
           : null;
-        const activeProject =
-          matchedProject ||
-          (context.projectId ? null : projectsPayload.projects[0] ?? null) ||
-          null;
+        const activeProject = matchedProject ?? null;
 
         if (activeProject) {
           const nextContext = {
             institutionId: activeProject.institution_id,
+            institutionName: user.institution_name || "",
             projectId: activeProject.id,
             projectName: activeProject.name,
             environment: activeProject.environment,

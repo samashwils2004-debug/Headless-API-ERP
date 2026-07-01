@@ -13,23 +13,18 @@ logger = logging.getLogger(__name__)
 
 # Rate limit config: (requests, window_seconds)
 LIMITS = {
-    "ai": (10, 60),           # 10 req/min for AI endpoints
-    "auth": (20, 60),         # 20 req/min for auth
-    "authenticated": (600, 60),  # 600 req/min for authenticated users
+    "ai": (200, 60),          # 200 req/min for AI/architect endpoints (dev-friendly)
+    "auth": (60, 60),          # 60 req/min for auth
+    "authenticated": (1200, 60),  # 1200 req/min for authenticated users
     "unauthenticated": (100, 60),  # 100 req/min for unauthenticated
 }
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, redis_url: str = ""):
+    def __init__(self, app):
         super().__init__(app)
-        self._redis = None
-        if redis_url:
-            try:
-                import redis as redis_lib
-                self._redis = redis_lib.from_url(redis_url, decode_responses=True)
-            except Exception as e:
-                logger.warning("Rate limit Redis unavailable: %s", e)
+        from app.services import get_redis
+        self._redis = get_redis()
 
     def _get_client_ip(self, request: Request) -> str:
         forwarded = request.headers.get("X-Forwarded-For")

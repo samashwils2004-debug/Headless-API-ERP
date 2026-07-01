@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(
+  () => import("@/components/console/MonacoEditorWrapper"),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse" style={{ background: "#1b1b24" }} /> }
+);
 
 import { useWorkflowStore } from "@/lib/stores/workflow-store";
 

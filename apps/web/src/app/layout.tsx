@@ -1,5 +1,4 @@
 ﻿import "./globals.css";
-import "@xyflow/react/dist/style.css";
 import type { Metadata, Viewport } from "next";
 import React from "react";
 

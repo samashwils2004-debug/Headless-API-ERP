@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Plus,
   FolderOpen,
@@ -13,16 +12,17 @@ import {
   Rocket,
   X,
   Trash2,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createProject, deleteProject, listProjects } from "@/lib/console-api";
+import { createProject, deleteProject, listProjects, updateProject } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { useProjectStore } from "@/lib/stores/project-store";
 import type { ProjectItem } from "@/types/contracts";
 
 export default function ProjectsPage() {
-  const router = useRouter();
   const context = useProjectContextStore((s) => s.context);
   const setContext = useProjectContextStore((s) => s.setContext);
   const projects = useProjectStore((s) => s.projects);
@@ -31,10 +31,17 @@ export default function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [institutionName, setInstitutionName] = useState(context.institutionName || "");
   const [environment, setEnvironment] = useState<"test" | "production">("test");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Rename state
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
+  const [editingInstitutionName, setEditingInstitutionName] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   // Auto-derive slug from name
   useEffect(() => {
@@ -55,7 +62,7 @@ export default function ProjectsPage() {
       });
       setProjects(refreshed.projects);
       if (context.projectId === project.id) {
-        setContext({ institutionId: project.institution_id, projectId: "", projectName: "", environment: "test" });
+        setContext({ institutionId: project.institution_id, institutionName: context.institutionName, projectId: "", projectName: "", environment: "test" });
       }
       toast.success(`Project "${project.name}" deleted`);
     } catch (e: unknown) {
@@ -65,16 +72,64 @@ export default function ProjectsPage() {
     }
   };
 
-  const selectProject = (project: ProjectItem) => {
+  const startEdit = (project: ProjectItem) => {
+    setEditingProjectId(project.id);
+    setEditingProjectName(project.name);
+    setEditingInstitutionName(context.institutionName || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingProjectId(null);
+    setEditingProjectName("");
+    setEditingInstitutionName("");
+  };
+
+  const handleRename = async (project: ProjectItem) => {
+    if (!editingProjectName.trim()) return;
+    setRenaming(true);
+    try {
+      const updated = await updateProject(
+        { institutionId: project.institution_id, projectId: project.id },
+        project.id,
+        {
+          name: editingProjectName.trim(),
+          institution_name: editingInstitutionName.trim() || undefined,
+        }
+      );
+      const refreshed = await listProjects({
+        institutionId: project.institution_id,
+        projectId: project.id,
+      });
+      setProjects(refreshed.projects);
+      // Update context if the renamed project is currently active
+      if (context.projectId === project.id) {
+        setContext({
+          ...context,
+          projectName: updated.name,
+          institutionName: editingInstitutionName.trim() || context.institutionName,
+        });
+      }
+      toast.success("Project renamed");
+      cancelEdit();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const selectProject = (project: ProjectItem, overrideInstitutionName?: string) => {
     setContext({
       institutionId: project.institution_id,
+      institutionName: overrideInstitutionName ?? context.institutionName,
       projectId: project.id,
       projectName: project.name,
       environment: project.environment,
     });
     document.cookie = `institution_id=${project.institution_id}; path=/; samesite=lax`;
     document.cookie = `project_id=${project.id}; path=/; samesite=lax`;
-    router.push("/console/workflows");
+    // Stay on Projects page; user can navigate via the sidebar
+    toast.success(`Project "${project.name}" selected`);
   };
 
   const onCreate = async (event: FormEvent) => {
@@ -85,16 +140,19 @@ export default function ProjectsPage() {
     try {
       const { id: newId } = await createProject(
         { institutionId: context.institutionId, projectId: context.projectId || "bootstrap" },
-        { name, slug, environment }
+        { name, slug, environment, institution_name: institutionName.trim() || undefined }
       );
       const refreshed = await listProjects({
         institutionId: context.institutionId,
         projectId: context.projectId || "bootstrap",
       });
       setProjects(refreshed.projects);
-      // Auto-select the newly created project and navigate
+      // Auto-select the newly created project (no forced navigation)
       const newProject = refreshed.projects.find((p) => p.id === newId);
-      if (newProject) selectProject(newProject);
+      if (newProject) selectProject(newProject, institutionName.trim() || context.institutionName);
+      setShowForm(false);
+      setName("");
+      setSlug("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create project");
       setCreating(false);
@@ -123,6 +181,87 @@ export default function ProjectsPage() {
         </button>
       </div>
 
+      {/* Institution Name Edit */}
+      <div className="rounded-lg p-4 flex items-center gap-3" style={{ background: "#141418", border: "1px solid #25252b" }}>
+        <span className="text-xs font-medium shrink-0" style={{ color: "#71717a" }}>Institution:</span>
+        {editingProjectId === "__institution__" ? (
+          <div className="flex items-center gap-2 flex-1">
+            <input
+              value={editingInstitutionName}
+              onChange={(e) => setEditingInstitutionName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  // Update institution name via the active project
+                  const activeProject = projects.find((p) => p.id === context.projectId) || projects[0];
+                  if (activeProject) {
+                    setRenaming(true);
+                    updateProject(
+                      { institutionId: activeProject.institution_id, projectId: activeProject.id },
+                      activeProject.id,
+                      { institution_name: editingInstitutionName.trim() }
+                    ).then(() => {
+                      setContext({ ...context, institutionName: editingInstitutionName.trim() });
+                      toast.success("Institution name updated");
+                      cancelEdit();
+                    }).catch((e: unknown) => {
+                      toast.error(e instanceof Error ? e.message : "Update failed");
+                    }).finally(() => setRenaming(false));
+                  }
+                }
+                if (e.key === "Escape") cancelEdit();
+              }}
+              autoFocus
+              className="flex-1 rounded px-2 py-1 text-sm outline-none"
+              style={{ background: "#0f0f12", border: "1px solid #3b82f6", color: "#f4f4f5" }}
+            />
+            <button
+              onClick={() => {
+                const activeProject = projects.find((p) => p.id === context.projectId) || projects[0];
+                if (activeProject) {
+                  setRenaming(true);
+                  updateProject(
+                    { institutionId: activeProject.institution_id, projectId: activeProject.id },
+                    activeProject.id,
+                    { institution_name: editingInstitutionName.trim() }
+                  ).then(() => {
+                    setContext({ ...context, institutionName: editingInstitutionName.trim() });
+                    toast.success("Institution name updated");
+                    cancelEdit();
+                  }).catch((e: unknown) => {
+                    toast.error(e instanceof Error ? e.message : "Update failed");
+                  }).finally(() => setRenaming(false));
+                }
+              }}
+              disabled={renaming}
+              className="p-1 rounded"
+              style={{ color: "#4ade80" }}
+            >
+              {renaming ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            </button>
+            <button onClick={cancelEdit} className="p-1 rounded" style={{ color: "#71717a" }}>
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-sm font-medium truncate" style={{ color: "#f4f4f5" }}>
+              {context.institutionName || context.institutionId || "Not set"}
+            </span>
+            <button
+              onClick={() => {
+                setEditingProjectId("__institution__");
+                setEditingInstitutionName(context.institutionName || "");
+              }}
+              className="shrink-0 p-1 rounded opacity-50 hover:opacity-100 transition-opacity"
+              style={{ color: "#71717a" }}
+              title="Rename institution"
+            >
+              <Pencil size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Create form */}
       {showForm && (
         <form
@@ -131,6 +270,20 @@ export default function ProjectsPage() {
           style={{ background: "#141418", border: "1px solid #25252b" }}
         >
           <p className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Create a new project</p>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium" style={{ color: "#a1a1aa" }}>
+              Institution Name
+              <span className="ml-1 font-normal" style={{ color: "#52525b" }}>(shown in the console header)</span>
+            </label>
+            <input
+              value={institutionName}
+              onChange={(e) => setInstitutionName(e.target.value)}
+              placeholder="e.g. MIT, Stanford University, Acme Corp"
+              className="w-full rounded px-3 py-2 text-sm outline-none"
+              style={{ background: "#1b1b24", border: "1px solid #25252b", color: "#f4f4f5" }}
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -210,78 +363,119 @@ export default function ProjectsPage() {
         <div className="space-y-2">
           {projects.map((project) => {
             const isSelected = project.id === selectedId;
+            const isEditingThis = editingProjectId === project.id;
             return (
               <div
                 key={project.id}
-                className="rounded-lg px-3 py-3 sm:px-5 sm:py-4 flex items-start sm:items-center justify-between gap-3 transition-colors"
+                className="rounded-lg px-3 py-3 sm:px-5 sm:py-4 flex flex-col gap-3 transition-colors"
                 style={
                   isSelected
                     ? { background: "#0d1f3c", border: "1px solid #1d4ed8" }
                     : { background: "#141418", border: "1px solid #25252b" }
                 }
               >
-                <div className="flex items-center gap-4 min-w-0">
-                  {/* Icon */}
-                  <div className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
-                    style={{ background: isSelected ? "#1e3a5f" : "#1b1b24" }}>
-                    <FolderOpen size={16} style={{ color: isSelected ? "#60a5fa" : "#52525b" }} />
-                  </div>
-
-                  {/* Name + meta */}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium" style={{ color: isSelected ? "#f4f4f5" : "#d4d4d8" }}>
-                        {project.name}
-                      </span>
-                      {isSelected && (
-                        <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded font-medium"
-                          style={{ background: "#0a1a0a", color: "#86efac", border: "1px solid #1a3a1a" }}>
-                          <CheckCircle2 size={10} /> Active
-                        </span>
-                      )}
-                      <span className="text-[11px] px-1.5 py-0.5 rounded"
-                        style={
-                          project.environment === "production"
-                            ? { background: "#1a0a2a", color: "#c084fc", border: "1px solid #2f1f40" }
-                            : { background: "#141418", color: "#71717a", border: "1px solid #25252b" }
-                        }>
-                        {project.environment === "production" ? <span className="flex items-center gap-1"><Rocket size={9} /> Production</span> : <span className="flex items-center gap-1"><FlaskConical size={9} /> Test</span>}
-                      </span>
+                <div className="flex items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-4 min-w-0">
+                    {/* Icon */}
+                    <div className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
+                      style={{ background: isSelected ? "#1e3a5f" : "#1b1b24" }}>
+                      <FolderOpen size={16} style={{ color: isSelected ? "#60a5fa" : "#52525b" }} />
                     </div>
-                    <p className="text-xs mt-0.5 font-mono" style={{ color: "#52525b" }}>{project.slug}</p>
-                  </div>
-                </div>
 
-                {/* Action */}
-                <div className="shrink-0 flex items-center gap-2">
-                  {isSelected ? (
+                    {/* Name + meta */}
+                    <div className="min-w-0">
+                      {isEditingThis ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={editingProjectName}
+                            onChange={(e) => setEditingProjectName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRename(project);
+                              if (e.key === "Escape") cancelEdit();
+                            }}
+                            autoFocus
+                            className="rounded px-2 py-1 text-sm font-medium outline-none"
+                            style={{ background: "#0f0f12", border: "1px solid #3b82f6", color: "#f4f4f5", minWidth: 140 }}
+                          />
+                          <button
+                            onClick={() => handleRename(project)}
+                            disabled={renaming || !editingProjectName.trim()}
+                            className="p-1 rounded disabled:opacity-50"
+                            style={{ color: "#4ade80" }}
+                          >
+                            {renaming ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                          </button>
+                          <button onClick={cancelEdit} className="p-1 rounded" style={{ color: "#71717a" }}>
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium" style={{ color: isSelected ? "#f4f4f5" : "#d4d4d8" }}>
+                            {project.name}
+                          </span>
+                          <button
+                            onClick={() => startEdit(project)}
+                            className="opacity-40 hover:opacity-100 transition-opacity p-0.5 rounded"
+                            style={{ color: "#71717a" }}
+                            title="Rename project"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          {isSelected && (
+                            <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded font-medium"
+                              style={{ background: "#0a1a0a", color: "#86efac", border: "1px solid #1a3a1a" }}>
+                              <CheckCircle2 size={10} /> Active
+                            </span>
+                          )}
+                          <span className="text-[11px] px-1.5 py-0.5 rounded"
+                            style={
+                              project.environment === "production"
+                                ? { background: "#1a0a2a", color: "#c084fc", border: "1px solid #2f1f40" }
+                                : { background: "#141418", color: "#71717a", border: "1px solid #25252b" }
+                            }>
+                            {project.environment === "production" ? <span className="flex items-center gap-1"><Rocket size={9} /> Production</span> : <span className="flex items-center gap-1"><FlaskConical size={9} /> Test</span>}
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-xs mt-0.5 font-mono" style={{ color: "#52525b" }}>{project.slug}</p>
+                    </div>
+                  </div>
+
+                  {/* Action */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    {isSelected ? (
+                      <button
+                        onClick={() => {
+                          // Navigate to workflows using a link rather than router
+                          window.location.href = "/console/workflows";
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium"
+                        style={{ background: "#1e3a5f", border: "1px solid #1d4ed8", color: "#93c5fd" }}
+                      >
+                        <GitBranch size={12} /> Go to Workflows
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => selectProject(project)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                        style={{ background: "#1b1b24", border: "1px solid #25252b", color: "#a1a1aa" }}
+                      >
+                        Select <ChevronRight size={12} />
+                      </button>
+                    )}
                     <button
-                      onClick={() => router.push("/console/workflows")}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium"
-                      style={{ background: "#1e3a5f", border: "1px solid #1d4ed8", color: "#93c5fd" }}
+                      onClick={() => handleDelete(project)}
+                      disabled={deletingId === project.id}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded text-xs transition-colors disabled:opacity-40"
+                      style={{ color: "#71717a", border: "1px solid #25252b" }}
+                      title="Delete project"
                     >
-                      <GitBranch size={12} /> Go to Workflows
+                      {deletingId === project.id
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <Trash2 size={11} />}
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => selectProject(project)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors"
-                      style={{ background: "#1b1b24", border: "1px solid #25252b", color: "#a1a1aa" }}
-                    >
-                      Select <ChevronRight size={12} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(project)}
-                    disabled={deletingId === project.id}
-                    className="flex items-center gap-1 px-2 py-1.5 rounded text-xs transition-colors disabled:opacity-40"
-                    style={{ color: "#71717a", border: "1px solid #25252b" }}
-                    title="Delete project"
-                  >
-                    {deletingId === project.id
-                      ? <Loader2 size={11} className="animate-spin" />
-                      : <Trash2 size={11} />}
-                  </button>
+                  </div>
                 </div>
               </div>
             );

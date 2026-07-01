@@ -8,7 +8,7 @@ import copy
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.ai.architect.erp_schema import ERP_SYSTEM_PROMPT
 from app.ai.architect.nlp_intent_parser import NLPIntentParser
@@ -453,6 +453,60 @@ def link_workflow(
     }
 
 
+class BulkLinkWorkflowRequest(BaseModel):
+    domain_ids: list[str] = Field(min_length=1)
+    workflow_id: str = Field(min_length=1)
+    workflow_name: str = Field(min_length=1)
+
+
+@router.post("/architect/{arch_id}/link-workflow-bulk")
+def link_workflow_bulk(
+    arch_id: str,
+    body: BulkLinkWorkflowRequest,
+    db: Session = Depends(get_db),
+    _cu=Depends(get_current_user),
+    tenant=Depends(get_tenant_context),
+    _=Depends(check_permission("architect:write")),
+):
+    """Link one workflow to every domain in one atomic transaction."""
+    arch = _get_arch_or_404(arch_id, tenant, db)
+
+    wf = db.query(Workflow).filter(
+        Workflow.id == body.workflow_id,
+        Workflow.institution_id == tenant.institution_id,
+        Workflow.project_id == tenant.project_id,
+    ).first()
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found in this project")
+
+    # Apply all link operations sequentially on the same in-memory graph —
+    # a single db.commit() at the end prevents the read-modify-write race.
+    graph = arch.graph_json
+    for domain_id in body.domain_ids:
+        graph = _apply_operation(graph, {
+            "operation": "link_workflow",
+            "workflow_link": {
+                "domain_id": domain_id,
+                "workflow_id": body.workflow_id,
+                "workflow_name": body.workflow_name,
+            },
+        })
+
+    arch.graph_json = graph
+    arch.updated_at = utcnow_naive()
+    linked = _linked_workflows(arch)
+    arch.visualization_config = _viz_generator.generate(graph, linked)
+    db.commit()
+
+    return {
+        "linked_count": len(body.domain_ids),
+        "workflow_id": body.workflow_id,
+        "workflow_name": body.workflow_name,
+        "graph": graph,
+        "visualization_config": arch.visualization_config,
+    }
+
+
 @router.post("/architect/{arch_id}/compile", response_model=CompileResponse, status_code=201)
 async def compile_architecture(
     arch_id: str,
@@ -638,11 +692,14 @@ Output ONLY valid JSON with this exact structure:
 }
 
 Rules:
-- One module per domain that has a linked workflow
-- Fields come from the workflow schema fields
-- Actions come from the workflow states (e.g. Submit, Approve, Reject)
-- Relationships come from domain integrations
-- nav_position is 1-based ordering
+- CRITICAL: Generate exactly ONE module for EVERY domain listed in the domains array — no exceptions.
+  Do not skip any domain, whether or not it has a linked workflow.
+- For domains with a linked workflow: use the workflow schema fields for fields[], workflow states for actions[], and badge_values.
+- For domains without a linked workflow: infer sensible fields, actions, and table_columns from the domain label/name.
+- Fields come from the workflow schema fields (or inferred from domain label if no workflow).
+- Actions come from the workflow states (e.g. Submit, Approve, Reject) or inferred if no workflow.
+- Relationships come from domain integrations.
+- nav_position is 1-based ordering — every module must have a unique nav_position from 1 to N.
 - stats: exactly 4 KPI cards per module with realistic institutional values
   (e.g. "1,247", "89%", "$2.4M", "342"). Include a trend direction.
 - table_columns: 4-6 columns per module describing the data table.
@@ -667,38 +724,52 @@ async def generate_design(
     arch = _get_arch_or_404(arch_id, tenant, db)
     domains = arch.graph_json.get("erp_system", {}).get("domains", [])
 
-    workflow_schemas = []
+    # Build compact per-domain context — include ALL domains, attach workflow info where available
+    domain_context = []
     for domain in domains:
+        entry: dict = {
+            "id": domain["id"],
+            "label": domain.get("label", domain["id"]),
+        }
+        if domain.get("color"):
+            entry["color"] = domain["color"]
         wf_id = domain.get("workflow_id")
-        if not wf_id:
-            continue
-        wf = db.query(Workflow).filter(
-            Workflow.id == wf_id,
-            Workflow.institution_id == tenant.institution_id,
-        ).first()
-        if wf and wf.definition:
-            schema = wf.definition.get("schema", {})
-            states = list(wf.definition.get("states", {}).keys())
-            workflow_schemas.append({
-                "domain_id": domain["id"],
-                "domain_label": domain.get("label", domain["id"]),
-                "workflow_name": wf.name,
-                "schema_fields": schema.get("fields", []),
-                "states": states,
-                "color": domain.get("color"),
-            })
+        if wf_id:
+            wf = db.query(Workflow).filter(
+                Workflow.id == wf_id,
+                Workflow.institution_id == tenant.institution_id,
+            ).first()
+            if wf and wf.definition:
+                schema = wf.definition.get("schema", {})
+                states = list(wf.definition.get("states", {}).keys())
+                # Compact field list: just name+type to save tokens
+                compact_fields = [
+                    {"name": f["name"], "type": f.get("type", "string")}
+                    for f in schema.get("fields", [])
+                ]
+                entry["workflow"] = {
+                    "name": wf.name,
+                    "states": states,
+                    "fields": compact_fields,
+                }
+        domain_context.append(entry)
 
     context = {
         "system_name": arch.name,
-        "domains": [{"id": d["id"], "label": d.get("label", d["id"])} for d in domains],
-        "integrations": arch.graph_json.get("erp_system", {}).get("integrations", []),
-        "workflow_schemas": workflow_schemas,
+        "total_domains": len(domains),
+        "domains": domain_context,
+        "integrations": [
+            {"from": i.get("from_domain"), "to": i.get("to_domain"), "type": i.get("type")}
+            for i in arch.graph_json.get("erp_system", {}).get("integrations", [])
+        ],
     }
 
     router_instance = get_provider_router()
+    context_json = _json.dumps(context)
     user_prompt = (
-        f"Design an ERP for: {arch.name}\n\n"
-        f"Context: {_json.dumps(context)[:3000]}"
+        f"Design an ERP UI mockup for: {arch.name}\n\n"
+        f"There are {len(domains)} domains total — you MUST generate one module for each.\n\n"
+        f"Domain and workflow data:\n{context_json}"
     )
 
     response = router_instance.generate(

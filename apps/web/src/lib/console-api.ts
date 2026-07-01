@@ -136,13 +136,26 @@ export async function listProjects(tenant: TenantContext) {
   return parse<{ projects: ProjectItem[] }>(response);
 }
 
-export async function createProject(tenant: TenantContext, payload: { name: string; slug: string; environment: "test" | "production" }) {
+export async function createProject(tenant: TenantContext, payload: { name: string; slug: string; environment: "test" | "production"; institution_name?: string }) {
   const response = await fetch("/api/projects", {
     method: "POST",
     headers: headersForTenant(tenant),
     body: JSON.stringify(payload),
   });
   return parse<{ id: string }>(response);
+}
+
+export async function updateProject(
+  tenant: TenantContext,
+  projectId: string,
+  payload: { name?: string; institution_name?: string }
+) {
+  const response = await fetch(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify(payload),
+  });
+  return parse<ProjectItem>(response);
 }
 
 export async function deleteProject(tenant: TenantContext, projectId: string) {
@@ -431,6 +444,19 @@ export async function linkWorkflowToDomain(
     body: JSON.stringify(body),
   });
   return parse<ArchitectureItem>(response);
+}
+
+export async function linkAllWorkflowsToDomains(
+  tenant: TenantContext,
+  archId: string,
+  body: { domain_ids: string[]; workflow_id: string; workflow_name: string }
+) {
+  const response = await fetch(`/api/architect/${archId}/link-workflow-bulk`, {
+    method: "POST",
+    headers: headersForTenant(tenant),
+    body: JSON.stringify(body),
+  });
+  return parse<{ linked_count: number; workflow_id: string; workflow_name: string; graph: unknown; visualization_config: unknown }>(response);
 }
 
 export async function getAvailableWorkflows(tenant: TenantContext, archId: string) {

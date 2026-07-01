@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import User
+from app.models import Institution, User
 from app.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from app.security import (
     create_access_token,
@@ -79,6 +79,14 @@ async def register(payload: RegisterRequest, response: Response, db: Session = D
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user)):
-    return user
+async def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    institution = db.get(Institution, user.institution_id)
+    return UserResponse(
+        id=user.id,
+        institution_id=user.institution_id,
+        institution_name=institution.name if institution else "",
+        email=user.email,
+        name=user.name,
+        role=user.role,
+    )
 

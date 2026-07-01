@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(
+  () => import("@/components/console/MonacoEditorWrapper"),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse" style={{ background: "#1b1b24" }} /> }
+);
 import { toast } from "sonner";
 
 import { hasBlockingValidationIssues } from "@/lib/enforcement/validationGuard";

@@ -31,6 +31,7 @@ class RegisterRequest(BaseModel):
 class UserResponse(BaseModel):
     id: str
     institution_id: str
+    institution_name: str = ""
     email: str
     name: str
     role: str
@@ -42,6 +43,12 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1)
     slug: str = Field(min_length=1)
     environment: str = "test"
+    institution_name: str = ""
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    institution_name: str | None = None
 
 
 class ProjectResponse(BaseModel):

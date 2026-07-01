@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   Wand2,
@@ -18,6 +18,7 @@ import {
   Layers,
   Trash2,
   Eye,
+  LinkIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -27,21 +28,25 @@ import {
   getArchitectureVersions,
   compileArchitecture,
   linkWorkflowToDomain,
+  linkAllWorkflowsToDomains,
   generateERPDesign,
   deleteDomain,
+  listWorkflows,
   type ArchitectureItem,
   type ArchitectureVersionItem,
   type DesignSpec,
+  type WorkflowItem,
 } from "@/lib/console-api";
 import { useProjectContextStore } from "@/lib/stores/project-context-store";
 import { COMPLIANCE_OPTIONS } from "@/lib/constants";
 import type { DomainDef, ERPDomainGraph } from "@/types/contracts";
 import { ERPDesign } from "@/components/console/ERPDesign";
 import { ERPPreview, type VisualizationConfig } from "@/components/console/ERPPreview";
+import { WorkflowDiagramModal } from "@/components/console/WorkflowDiagramModal";
 
 const cardStyle = { background: "#141418", borderColor: "#25252b" };
 
-const DOMAIN_COLORS = [
+const MODULE_COLORS = [
   "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b",
   "#ef4444", "#06b6d4", "#ec4899", "#14b8a6",
 ];
@@ -73,7 +78,7 @@ export default function ArchitectPage() {
   const [versions, setVersions] = useState<ArchitectureVersionItem[]>([]);
   const [availableWorkflows, setAvailableWorkflows] = useState<AvailableWorkflow[]>([]);
   const [showVersions, setShowVersions] = useState(false);
-  const [linkingDomainId, setLinkingDomainId] = useState<string | null>(null);
+  const [linkingModuleId, setLinkingModuleId] = useState<string | null>(null);
   const [compiling, setCompiling] = useState(false);
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [selectedWorkflowIds, setSelectedWorkflowIds] = useState<string[]>([]);
@@ -82,7 +87,14 @@ export default function ArchitectPage() {
   const [viewMode, setViewMode] = useState<"graph" | "preview" | "mockup">("graph");
   const [designSpec, setDesignSpec] = useState<DesignSpec | null>(null);
   const [generatingDesign, setGeneratingDesign] = useState(false);
-  const [deletingDomainId, setDeletingDomainId] = useState<string | null>(null);
+  const [deletingModuleId, setDeletingModuleId] = useState<string | null>(null);
+  // Link-to-all-modules dropdown
+  const [showLinkAll, setShowLinkAll] = useState(false);
+  const [linkingAllWorkflowId, setLinkingAllWorkflowId] = useState<string | null>(null);
+  const linkAllRef = useRef<HTMLDivElement>(null);
+
+  const [workflowsById, setWorkflowsById] = useState<Record<string, WorkflowItem>>({});
+  const [diagramWorkflow, setDiagramWorkflow] = useState<WorkflowItem | null>(null);
 
   const tenant = { institutionId: context.institutionId, projectId: context.projectId };
   const noProject = !context.institutionId || !context.projectId;
@@ -93,12 +105,16 @@ export default function ArchitectPage() {
     try {
       const a = await getOrCreateArchitecture(tenant);
       setArch(a);
-      const [versionsData, workflowsData] = await Promise.all([
+      const [versionsData, workflowsData, allWorkflowsData] = await Promise.all([
         getArchitectureVersions(tenant, a.id),
         getAvailableWorkflows(tenant, a.id),
+        listWorkflows(tenant),
       ]);
       setVersions(versionsData.versions);
       setAvailableWorkflows(workflowsData.workflows);
+      const byId: Record<string, WorkflowItem> = {};
+      for (const wf of allWorkflowsData.workflows) byId[wf.id] = wf;
+      setWorkflowsById(byId);
 
       // Auto-generate ERP design if redirected from workflow deploy
       const autoDesign =
@@ -128,6 +144,17 @@ export default function ArchitectPage() {
   useEffect(() => {
     loadArch();
   }, [loadArch]);
+
+  // Close link-all dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (linkAllRef.current && !linkAllRef.current.contains(e.target as Node)) {
+        setShowLinkAll(false);
+      }
+    }
+    if (showLinkAll) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showLinkAll]);
 
   async function handleApplyPrompt() {
     if (!prompt.trim() || !arch) return;
@@ -166,15 +193,32 @@ export default function ArchitectPage() {
     }
   }
 
-  async function handleLinkWorkflow(domainId: string, workflowId: string, workflowName: string) {
+  async function handleLinkWorkflow(moduleId: string, workflowId: string, workflowName: string) {
     if (!arch) return;
     try {
-      await linkWorkflowToDomain(tenant, arch.id, { domain_id: domainId, workflow_id: workflowId, workflow_name: workflowName });
-      setLinkingDomainId(null);
+      await linkWorkflowToDomain(tenant, arch.id, { domain_id: moduleId, workflow_id: workflowId, workflow_name: workflowName });
+      setLinkingModuleId(null);
       await loadArch();
-      toast.success(`Linked "${workflowName}" to domain`);
+      toast.success(`Linked "${workflowName}" to module`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to link workflow");
+    }
+  }
+
+  async function handleLinkToAllModules(workflowId: string, workflowName: string) {
+    if (!arch) return;
+    setLinkingAllWorkflowId(workflowId);
+    setShowLinkAll(false);
+    try {
+      const currentModules: DomainDef[] = (arch.graph_json as ERPDomainGraph | undefined)?.erp_system?.domains ?? [];
+      const domainIds = currentModules.map((m) => m.id);
+      await linkAllWorkflowsToDomains(tenant, arch.id, { domain_ids: domainIds, workflow_id: workflowId, workflow_name: workflowName });
+      await loadArch();
+      toast.success(`Linked "${workflowName}" to all ${domainIds.length} modules`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to link to all modules");
+    } finally {
+      setLinkingAllWorkflowId(null);
     }
   }
 
@@ -198,12 +242,12 @@ export default function ArchitectPage() {
     }
   }
 
-  async function handleDeleteDomain(domainId: string, domainLabel: string) {
+  async function handleDeleteModule(moduleId: string, moduleLabel: string) {
     if (!arch) return;
-    if (!confirm(`Delete domain "${domainLabel}"? This cannot be undone.`)) return;
-    setDeletingDomainId(domainId);
+    if (!confirm(`Delete module "${moduleLabel}"? This cannot be undone.`)) return;
+    setDeletingModuleId(moduleId);
     try {
-      const data = await deleteDomain(tenant, arch.id, domainId);
+      const data = await deleteDomain(tenant, arch.id, moduleId);
       setArch((prev) =>
         prev
           ? {
@@ -214,15 +258,15 @@ export default function ArchitectPage() {
             }
           : prev,
       );
-      toast.success(`Domain "${domainLabel}" deleted`);
+      toast.success(`Module "${moduleLabel}" deleted`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete domain");
+      toast.error(err instanceof Error ? err.message : "Failed to delete module");
     } finally {
-      setDeletingDomainId(null);
+      setDeletingModuleId(null);
     }
   }
 
-  const domains: DomainDef[] = (arch?.graph_json as ERPDomainGraph | undefined)?.erp_system?.domains ?? [];
+  const modules: DomainDef[] = (arch?.graph_json as ERPDomainGraph | undefined)?.erp_system?.domains ?? [];
 
   if (noProject) {
     return (
@@ -242,6 +286,12 @@ export default function ArchitectPage() {
 
   return (
     <div className="w-full max-w-[1400px] space-y-6">
+      {/* Workflow diagram modal */}
+      <WorkflowDiagramModal
+        workflow={diagramWorkflow ? { name: diagramWorkflow.name, version: diagramWorkflow.version, definition: diagramWorkflow.definition } : null}
+        onClose={() => setDiagramWorkflow(null)}
+      />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -249,7 +299,7 @@ export default function ArchitectPage() {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold" style={{ color: "#f4f4f5" }}>Architect</h1>
             <p className="text-sm" style={{ color: "#8a8a94" }}>
-              ERP domain graph — compose your institutional infrastructure
+              ERP module graph — compose your institutional infrastructure
             </p>
           </div>
           <span className="shrink-0 ml-1 text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#3b82f630", background: "#3b82f610", color: "#60a5fa" }}>
@@ -325,26 +375,29 @@ export default function ArchitectPage() {
           <div className="flex flex-col items-center justify-center h-64 rounded-lg border" style={{ background: "#141418", borderColor: "#25252b" }}>
             <Layers size={32} className="mb-3 opacity-20" style={{ color: "#71717a" }} />
             <p className="text-sm" style={{ color: "#71717a" }}>No mockup generated yet.</p>
-            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Link workflows to domains, then click Generate ERP Mockup.</p>
+            <p className="text-xs mt-1" style={{ color: "#52525b" }}>Link workflows to modules, then click Generate ERP Mockup.</p>
           </div>
         )
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-        {/* Left: domain graph + prompt */}
+        {/* Left: module graph + prompt */}
         <div className="space-y-4">
-          {/* NLP Prompt Bar */}
+          {/* NLP Prompt Bar — add modules only */}
           <div className="rounded-lg border p-4" style={cardStyle}>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-1">
               <Wand2 size={14} style={{ color: "#8b5cf6" }} />
-              <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Describe Changes</h3>
+              <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>Add ERP Modules</h3>
             </div>
+            <p className="text-xs mb-3" style={{ color: "#52525b" }}>
+              Describe the ERP modules to add. Existing modules from deployed workflows are preserved automatically.
+            </p>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !applying && handleApplyPrompt()}
-                placeholder='e.g. "Add admissions and financial aid domains"'
+                placeholder='e.g. "Add Finance and HR modules"'
                 className="flex-1 rounded px-3 py-2 text-sm outline-none"
                 style={{ background: "#0f0f12", border: "1px solid #25252b", color: "#f4f4f5" }}
               />
@@ -355,7 +408,7 @@ export default function ArchitectPage() {
                 style={{ background: "#3b82f6", color: "#fff" }}
               >
                 {applying ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
-                {applying ? "Applying…" : "Apply"}
+                {applying ? "Adding…" : "Add"}
               </button>
             </div>
             {lastDiff && (
@@ -386,26 +439,70 @@ export default function ArchitectPage() {
             </div>
           </div>
 
-          {/* Domain Graph */}
+          {/* Module Graph */}
           <div className="rounded-lg border p-5" style={cardStyle}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>ERP Domains</h3>
-              <span className="text-xs" style={{ color: "#52525b" }}>{domains.length} domain{domains.length !== 1 ? "s" : ""}</span>
+              <h3 className="text-sm font-medium" style={{ color: "#f4f4f5" }}>ERP Modules</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: "#52525b" }}>{modules.length} module{modules.length !== 1 ? "s" : ""}</span>
+
+                {/* Link to all modules button */}
+                {modules.length > 0 && availableWorkflows.length > 0 && (
+                  <div className="relative" ref={linkAllRef}>
+                    <button
+                      onClick={() => setShowLinkAll((v) => !v)}
+                      disabled={!!linkingAllWorkflowId}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-50"
+                      style={{ background: "#1e3a5f", borderColor: "#1d4ed8", color: "#93c5fd" }}
+                      title="Link one workflow to all modules"
+                    >
+                      {linkingAllWorkflowId
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <LinkIcon size={11} />}
+                      Link to all modules
+                      {!linkingAllWorkflowId && <ChevronDown size={11} />}
+                    </button>
+
+                    {showLinkAll && (
+                      <div
+                        className="absolute right-0 top-full mt-1 z-30 rounded-lg border py-1 min-w-[200px] shadow-xl"
+                        style={{ background: "#1b1b24", borderColor: "#25252b" }}
+                      >
+                        <p className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: "#52525b" }}>
+                          Select workflow
+                        </p>
+                        {availableWorkflows.map((wf) => (
+                          <button
+                            key={wf.id}
+                            onClick={() => handleLinkToAllModules(wf.id, wf.name)}
+                            className="w-full text-left flex items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-[#0f0f12]"
+                            style={{ color: "#a1a1aa" }}
+                          >
+                            <GitBranch size={11} style={{ color: "#3b82f6", flexShrink: 0 }} />
+                            <span className="flex-1 truncate">{wf.name}</span>
+                            <span style={{ color: "#52525b" }}>v{wf.version}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {domains.length === 0 ? (
+            {modules.length === 0 ? (
               <div className="text-center py-12" style={{ color: "#52525b" }}>
                 <Building2 size={32} className="mx-auto mb-3 opacity-20" />
-                <p className="text-sm">No domains yet.</p>
-                <p className="text-xs mt-1">Describe your institutional ERP above to get started.</p>
+                <p className="text-sm">No modules yet.</p>
+                <p className="text-xs mt-1">Add modules using the prompt above to get started.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {domains.map((domain, idx) => {
-                  const color = domain.color || DOMAIN_COLORS[idx % DOMAIN_COLORS.length];
+                {modules.map((module, idx) => {
+                  const color = module.color || MODULE_COLORS[idx % MODULE_COLORS.length];
                   return (
                     <div
-                      key={domain.id}
+                      key={module.id}
                       className="rounded-lg border p-4"
                       style={{ background: "#1b1b24", borderColor: "#25252b" }}
                     >
@@ -413,26 +510,26 @@ export default function ArchitectPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
                           <span className="text-sm font-medium truncate" style={{ color: "#f4f4f5" }}>
-                            {domain.label}
+                            {module.label}
                           </span>
                         </div>
-                        {domain.requires_workflow !== false && (
+                        {module.requires_workflow !== false && (
                           <button
-                            onClick={() => setLinkingDomainId(linkingDomainId === domain.id ? null : domain.id)}
+                            onClick={() => setLinkingModuleId(linkingModuleId === module.id ? null : module.id)}
                             className="shrink-0 flex items-center gap-1 rounded px-2 py-0.5 text-xs border transition-colors"
                             style={
-                              domain.workflow_id
+                              module.workflow_id
                                 ? { borderColor: "#16a34a40", color: "#4ade80", background: "#0a1a0a" }
                                 : { borderColor: "#25252b", color: "#71717a", background: "transparent" }
                             }
                           >
                             <Link2 size={10} />
-                            {domain.workflow_id ? "linked" : "link"}
+                            {module.workflow_id ? "linked" : "link"}
                           </button>
                         )}
                         <button
-                          onClick={() => handleDeleteDomain(domain.id, domain.label)}
-                          disabled={deletingDomainId === domain.id}
+                          onClick={() => handleDeleteModule(module.id, module.label)}
+                          disabled={deletingModuleId === module.id}
                           className="shrink-0 flex items-center gap-1 rounded px-2 py-0.5 text-xs border transition-colors disabled:opacity-50"
                           style={{
                             borderColor: "#ef4444",
@@ -440,49 +537,72 @@ export default function ArchitectPage() {
                             background: "transparent"
                           }}
                         >
-                          {deletingDomainId === domain.id
+                          {deletingModuleId === module.id
                             ? <Loader2 size={10} className="animate-spin" />
                             : <Trash2 size={10} />}
                         </button>
                       </div>
-                      {domain.workflow_name && (
-                        <p className="mt-1.5 text-xs truncate" style={{ color: "#4ade80" }}>
-                          → {domain.workflow_name}
-                        </p>
+                      {module.workflow_name && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <p className="text-xs truncate flex-1" style={{ color: "#4ade80" }}>
+                            → {module.workflow_name}
+                          </p>
+                          {module.workflow_id && workflowsById[module.workflow_id] && (
+                            <button
+                              onClick={() => setDiagramWorkflow(workflowsById[module.workflow_id!])}
+                              className="shrink-0 p-0.5 rounded transition-colors hover:opacity-70"
+                              title="View workflow diagram"
+                              style={{ color: "#4ade80" }}
+                            >
+                              <Eye size={11} />
+                            </button>
+                          )}
+                        </div>
                       )}
 
-                      {domain.modules && domain.modules.length > 0 && (
+                      {module.modules && module.modules.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {domain.modules.slice(0, 3).map((m) => (
+                          {module.modules.slice(0, 3).map((m) => (
                             <span key={m.id} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#0f0f12", color: "#71717a" }}>
                               {m.label}
                             </span>
                           ))}
-                          {domain.modules.length > 3 && (
+                          {module.modules.length > 3 && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "#52525b" }}>
-                              +{domain.modules.length - 3}
+                              +{module.modules.length - 3}
                             </span>
                           )}
                         </div>
                       )}
 
                       {/* Workflow linker dropdown */}
-                      {linkingDomainId === domain.id && (
+                      {linkingModuleId === module.id && (
                         <div className="mt-3 pt-3 border-t space-y-1" style={{ borderColor: "#25252b" }}>
                           {availableWorkflows.length === 0 ? (
                             <p className="text-xs" style={{ color: "#52525b" }}>No deployed workflows yet</p>
                           ) : (
                             availableWorkflows.map((wf) => (
-                              <button
-                                key={wf.id}
-                                onClick={() => handleLinkWorkflow(domain.id, wf.id, wf.name)}
-                                className="w-full text-left flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors hover:bg-[#0f0f12]"
-                                style={{ color: "#a1a1aa" }}
-                              >
-                                <GitBranch size={10} style={{ color: "#3b82f6", flexShrink: 0 }} />
-                                {wf.name}
-                                <span className="ml-auto" style={{ color: "#52525b" }}>v{wf.version}</span>
-                              </button>
+                              <div key={wf.id} className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleLinkWorkflow(module.id, wf.id, wf.name)}
+                                  className="flex-1 text-left flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors hover:bg-[#0f0f12]"
+                                  style={{ color: "#a1a1aa" }}
+                                >
+                                  <GitBranch size={10} style={{ color: "#3b82f6", flexShrink: 0 }} />
+                                  <span className="flex-1 truncate">{wf.name}</span>
+                                  <span style={{ color: "#52525b" }}>v{wf.version}</span>
+                                </button>
+                                {workflowsById[wf.id] && (
+                                  <button
+                                    onClick={() => setDiagramWorkflow(workflowsById[wf.id])}
+                                    className="p-1 rounded transition-colors hover:opacity-70"
+                                    title="View diagram"
+                                    style={{ color: "#71717a" }}
+                                  >
+                                    <Eye size={10} />
+                                  </button>
+                                )}
+                              </div>
                             ))
                           )}
                         </div>
@@ -525,26 +645,38 @@ export default function ArchitectPage() {
                     <div className="py-3 text-center">
                       <p className="text-xs mb-2" style={{ color: "#52525b" }}>No deployed workflows yet</p>
                       <a href="/console/workflows" className="text-xs underline" style={{ color: "#3b82f6" }}>
-                        Build & deploy a workflow first →
+                        Build &amp; deploy a workflow first →
                       </a>
                     </div>
                   ) : (
                     availableWorkflows.map((wf) => (
-                      <label key={wf.id} className="flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-[#1b1b24]">
-                        <input
-                          type="checkbox"
-                          checked={selectedWorkflowIds.includes(wf.id)}
-                          onChange={(e) =>
-                            setSelectedWorkflowIds((prev) =>
-                              e.target.checked ? [...prev, wf.id] : prev.filter((id) => id !== wf.id)
-                            )
-                          }
-                          className="rounded"
-                        />
-                        <GitBranch size={10} style={{ color: "#3b82f6", flexShrink: 0 }} />
-                        <span className="text-xs truncate flex-1" style={{ color: "#a1a1aa" }}>{wf.name}</span>
-                        <span className="text-[10px] px-1 py-0.5 rounded shrink-0" style={{ background: "#0a1a0a", color: "#4ade80" }}>v{wf.version} ✓</span>
-                      </label>
+                      <div key={wf.id} className="flex items-center gap-1 rounded hover:bg-[#1b1b24]">
+                        <label className="flex items-center gap-2 cursor-pointer flex-1 px-2 py-1.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedWorkflowIds.includes(wf.id)}
+                            onChange={(e) =>
+                              setSelectedWorkflowIds((prev) =>
+                                e.target.checked ? [...prev, wf.id] : prev.filter((id) => id !== wf.id)
+                              )
+                            }
+                            className="rounded"
+                          />
+                          <GitBranch size={10} style={{ color: "#3b82f6", flexShrink: 0 }} />
+                          <span className="text-xs truncate flex-1" style={{ color: "#a1a1aa" }}>{wf.name}</span>
+                          <span className="text-[10px] px-1 py-0.5 rounded shrink-0" style={{ background: "#0a1a0a", color: "#4ade80" }}>v{wf.version} ✓</span>
+                        </label>
+                        {workflowsById[wf.id] && (
+                          <button
+                            onClick={() => setDiagramWorkflow(workflowsById[wf.id])}
+                            className="p-1.5 rounded transition-colors hover:opacity-70 shrink-0"
+                            title="View workflow diagram"
+                            style={{ color: "#71717a" }}
+                          >
+                            <Eye size={10} />
+                          </button>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>
@@ -552,15 +684,15 @@ export default function ArchitectPage() {
 
               <button
                 onClick={handleCompile}
-                disabled={compiling || selectedWorkflowIds.length === 0 || domains.length === 0}
+                disabled={compiling || selectedWorkflowIds.length === 0 || modules.length === 0}
                 className="w-full flex items-center justify-center gap-2 rounded px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50"
                 style={{ background: "#3b82f6", color: "#fff" }}
               >
                 {compiling ? <Loader2 size={13} className="animate-spin" /> : <Cpu size={13} />}
                 {compiling ? "Compiling…" : "Compile & Issue Key"}
               </button>
-              {domains.length === 0 && (
-                <p className="text-xs mt-2 text-center" style={{ color: "#52525b" }}>Add domains first</p>
+              {modules.length === 0 && (
+                <p className="text-xs mt-2 text-center" style={{ color: "#52525b" }}>Add modules first</p>
               )}
 
               <button
