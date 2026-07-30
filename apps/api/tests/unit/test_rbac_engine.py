@@ -31,3 +31,38 @@ def test_rbac_project_scope_assertion(seeded, db_session):
         wrong_tenant = TenantContext(institution_id=seeded["inst1"].id, project_id=seeded["proj2"].id)
         engine.assert_project_scope(seeded["reviewer"].id, "reviewer", wrong_tenant)
 
+
+def test_owner_requires_project_binding(seeded, db_session):
+    from app.tenant import TenantContext
+    from app.models import User
+    from app.security import hash_password
+
+    engine = RBACEngine(db_session)
+    tenant = TenantContext(institution_id=seeded["inst1"].id, project_id=seeded["proj1"].id)
+
+    unbound_owner = User(
+        institution_id=seeded["inst1"].id,
+        email="unbound-owner@tenant1.local",
+        name="Unbound Owner",
+        role="owner",
+        password_hash=hash_password("OwnerPass123!"),
+    )
+    db_session.add(unbound_owner)
+    db_session.commit()
+    db_session.refresh(unbound_owner)
+
+    with pytest.raises(HTTPException):
+        engine.assert_project_scope(unbound_owner.id, "owner", tenant)
+
+    db_session.add(
+        ProjectRoleBinding(
+            institution_id=seeded["inst1"].id,
+            project_id=seeded["proj1"].id,
+            user_id=unbound_owner.id,
+            role="owner",
+        )
+    )
+    db_session.commit()
+
+    engine.assert_project_scope(unbound_owner.id, "owner", tenant)
+

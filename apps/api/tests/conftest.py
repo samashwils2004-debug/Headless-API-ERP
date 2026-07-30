@@ -1,7 +1,19 @@
 ﻿from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+
+TESTS_DIR = Path(__file__).resolve().parent
+API_DIR = TESTS_DIR.parent
+TEST_DB_PATH = API_DIR / "test.db"
+
+os.environ["ENVIRONMENT"] = "development"
+os.environ["DEBUG"] = "true"
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH.as_posix()}"
+os.environ["SECRET_KEY"] = "test-secret-key-min-32-chars-long-here"
 
 from app.database import SessionLocal, engine
 from app.main import app
@@ -68,6 +80,14 @@ def seeded(db_session):
     db_session.refresh(reviewer)
     db_session.refresh(outsider_owner)
 
+    db_session.add(
+        ProjectRoleBinding(
+            institution_id=inst1.id,
+            project_id=proj1.id,
+            user_id=owner.id,
+            role="owner",
+        )
+    )
     db_session.add(
         ProjectRoleBinding(
             institution_id=inst1.id,

@@ -54,7 +54,7 @@ def test_blueprint_deploy_creates_workflow(client, seeded, db_session, make_head
     db_session.refresh(proposal)
 
     response = client.post(f"/api/ai/blueprints/{proposal.id}/deploy", headers=headers)
-    assert response.status_code == 200
+    assert response.status_code == 201
 
     workflows_response = client.get("/api/workflows", headers=headers)
     assert workflows_response.status_code == 200

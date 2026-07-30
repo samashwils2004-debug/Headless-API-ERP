@@ -17,6 +17,7 @@ from app.security import (
 
 router = APIRouter()
 settings = get_settings()
+SELF_REGISTRATION_ROLE = "viewer"
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -53,7 +54,7 @@ async def register(payload: RegisterRequest, response: Response, db: Session = D
         institution_id=payload.institution_id,
         email=payload.email,
         name=payload.name,
-        role=payload.role,
+        role=SELF_REGISTRATION_ROLE,
         password_hash=hash_password(payload.password),
     )
     db.add(user)
@@ -89,4 +90,3 @@ async def me(user: User = Depends(get_current_user), db: Session = Depends(get_d
         name=user.name,
         role=user.role,
     )
-

@@ -25,7 +25,6 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12)
     name: str = Field(min_length=1)
-    role: str = "owner"
 
 
 class UserResponse(BaseModel):

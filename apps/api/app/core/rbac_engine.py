@@ -64,8 +64,6 @@ class RBACEngine:
         return permission in DEFAULT_PERMISSIONS.get(role, set())
 
     def assert_project_scope(self, user_id: str, role: str, tenant: TenantContext) -> None:
-        if role == "owner":
-            return
         binding = (
             self.db.query(ProjectRoleBinding)
             .filter(

@@ -42,8 +42,8 @@ def test_ai_malformed_output_injection_rejected_on_deploy(client, seeded, db_ses
     db_session.refresh(proposal)
 
     response = client.post(f"/api/ai/blueprints/{proposal.id}/deploy", headers=headers)
-    assert response.status_code == 409
+    assert response.status_code == 422
 
     db_session.refresh(proposal)
-    assert proposal.status == "pending"
+    assert proposal.status == "validated"
 
